@@ -1,0 +1,41 @@
+{
+  "exam_name": "Programming Practical Exam",
+  "mode": "detect_only",
+  "sample_interval_seconds": 2,
+  "allowed": [
+    "bash",
+    "code",
+    "gcc",
+    "python3",
+    "terminal"
+  ],
+  "blocked": [
+    "chrome",
+    "chromium",
+    "discord",
+    "firefox",
+    "whatsapp"
+  ],
+  "priorities": {
+    "code": "high",
+    "gcc": "high",
+    "python3": "normal"
+  },
+  "unknown_action": "log",
+  "blocked_action": "terminate",
+  "protected": [
+    "exam-resource-manager",
+    "systemd"
+  ],
+  "pressure_thresholds": {
+    "elevated_memory_percent": 70,
+    "high_memory_percent": 82,
+    "critical_memory_percent": 92,
+    "elevated_growth_mb_s": 20,
+    "high_growth_mb_s": 60,
+    "critical_growth_mb_s": 120,
+    "high_psi_avg10": 2,
+    "critical_psi_avg10": 10
+  }
+}
+

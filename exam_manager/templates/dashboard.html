@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="5">
+  <title>Exam Resource Manager</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0b1020; color: #e8edf8; }
+    body { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    header, .cards { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 28px; } h2 { margin-top: 32px; font-size: 18px; }
+    .subtitle { color: #9aa7bd; margin: 5px 0 0; }
+    .card { background: #151d31; border: 1px solid #26324d; border-radius: 12px; padding: 16px; flex: 1; min-width: 170px; }
+    .label { color: #9aa7bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .value { display: block; margin-top: 8px; font-size: 22px; font-weight: 700; }
+    .active, .normal { color: #4ade80; } .inactive { color: #fbbf24; } .elevated { color: #fbbf24; }
+    .high { color: #fb923c; } .critical, .blocked, .terminate { color: #f87171; }
+    button { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    .start { background: #22c55e; color: #07130a; } .stop { background: #ef4444; color: white; }
+    table { width: 100%; border-collapse: collapse; background: #11182a; border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid #26324d; font-size: 13px; }
+    th { color: #9aa7bd; background: #151d31; } .empty { color: #9aa7bd; padding: 20px; }
+    code { color: #bfdbfe; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Exam Resource Manager</h1><p class="subtitle">{{ status.exam_name }} · session <code>{{ status.session_id }}</code></p></div>
+    <form method="post" action="{{ url_for('stop_exam' if status.active else 'start_exam') }}">
+      <button class="{{ 'stop' if status.active else 'start' }}">{{ 'Stop Exam' if status.active else 'Start Exam' }}</button>
+    </form>
+  </header>
+
+  <section class="cards" style="margin-top:24px">
+    <div class="card"><span class="label">Exam mode</span><span class="value {{ 'active' if status.active else 'inactive' }}">{{ 'ACTIVE' if status.active else 'INACTIVE' }}</span></div>
+    <div class="card"><span class="label">Enforcement</span><span class="value">{{ status.mode | upper }}</span></div>
+    <div class="card"><span class="label">Memory pressure</span><span class="value {{ status.pressure }}">{{ status.pressure | upper }}</span></div>
+    <div class="card"><span class="label">Processes</span><span class="value">{{ status.process_count }}</span></div>
+  </section>
+
+  {% if status.error %}<p class="critical"><strong>Monitor error:</strong> {{ status.error }}</p>{% endif %}
+
+  <h2>Recent policy events</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Process</th><th>Classification</th><th>Decision</th><th>Result</th></tr></thead>
+    <tbody>
+      {% for event in events %}
+      <tr><td>{{ event.timestamp[11:19] }}</td><td>{{ event.process_name }} ({{ event.pid }})</td><td class="{{ event.classification }}">{{ event.classification }}</td><td class="{{ event.decision }}">{{ event.decision }}</td><td>{{ event.result_message }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">No events yet. Start Exam Mode and launch a test application.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Running processes</h2>
+  <table>
+    <thead><tr><th>PID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for process in processes[:40] %}
+      <tr><td>{{ process.pid }}</td><td>{{ process.name }}</td><td>{{ '%.1f' | format(process.cpu_percent) }}%</td><td>{{ '%.1f' | format(process.memory_bytes / 1048576) }} MB</td><td>{{ process.status }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">Start Exam Mode to collect a process snapshot.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
+
