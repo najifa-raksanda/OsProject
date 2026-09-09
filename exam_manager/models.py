@@ -64,6 +64,24 @@ class MemorySnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class PredictionResult:
+    level: PressureLevel
+    raw_level: PressureLevel
+    score: int
+    confidence: float
+    reason: str
+    signals: tuple[str, ...]
+    samples_at_raw_level: int
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["level"] = self.level.value
+        data["raw_level"] = self.raw_level.value
+        data["signals"] = list(self.signals)
+        return data
+
+
+@dataclass(frozen=True, slots=True)
 class Decision:
     action: Action
     reason: str

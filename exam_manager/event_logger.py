@@ -38,8 +38,12 @@ class EventLogger:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             connection.execute(SCHEMA)
+            connection.commit()
+        finally:
+            connection.close()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
@@ -61,20 +65,28 @@ class EventLogger:
             decision.action.value, decision.reason, int(result.attempted), int(result.success), result.message,
             json.dumps(details, sort_keys=True),
         )
-        with self._lock, self._connect() as connection:
-            cursor = connection.execute(
-                """INSERT INTO events (
-                    timestamp, session_id, pid, process_name, cpu_percent, memory_bytes,
-                    pressure_level, classification, priority, decision, reason, attempted,
-                    success, result_message, details_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                values,
-            )
-            return int(cursor.lastrowid or 0)
+        with self._lock:
+            connection = self._connect()
+            try:
+                cursor = connection.execute(
+                    """INSERT INTO events (
+                        timestamp, session_id, pid, process_name, cpu_percent, memory_bytes,
+                        pressure_level, classification, priority, decision, reason, attempted,
+                        success, result_message, details_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
+                connection.commit()
+                return int(cursor.lastrowid or 0)
+            finally:
+                connection.close()
 
     def recent(self, limit: int = 100) -> list[dict[str, Any]]:
         safe_limit = min(max(int(limit), 1), 500)
-        with self._lock, self._connect() as connection:
-            rows = connection.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (safe_limit,)).fetchall()
+        with self._lock:
+            connection = self._connect()
+            try:
+                rows = connection.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (safe_limit,)).fetchall()
+            finally:
+                connection.close()
         return [dict(row) for row in rows]
-

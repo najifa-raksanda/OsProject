@@ -32,6 +32,8 @@ class ExamService:
         self._latest_processes: list[dict[str, Any]] = []
         self._latest_memory: dict[str, Any] = {}
         self._pressure = PressureLevel.NORMAL
+        self._latest_prediction: dict[str, Any] = {}
+        self._prediction_history: list[dict[str, Any]] = []
         self._error: str | None = None
 
     def start(self) -> bool:
@@ -43,6 +45,8 @@ class ExamService:
             self.action_manager = ActionManager(self.policy.mode)
             self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
             self.session_id = uuid.uuid4().hex[:12]
+            self._latest_prediction = {}
+            self._prediction_history = []
             self._active = True
             self._error = None
             self._thread = threading.Thread(target=self._run, name="exam-monitor", daemon=True)
@@ -64,12 +68,17 @@ class ExamService:
                 processes = self.monitor.snapshot()
                 new_processes = self.monitor.new_processes(processes)
                 memory = self.memory_monitor.sample()
-                pressure = self.predictor.classify(memory)
+                prediction = self.predictor.predict(memory)
+                pressure = prediction.level
+                prediction_data = {"timestamp": memory.timestamp, **prediction.to_dict()}
 
                 with self._lock:
                     self._latest_processes = [item.to_dict() for item in processes]
                     self._latest_memory = memory.to_dict()
                     self._pressure = pressure
+                    self._latest_prediction = prediction_data
+                    self._prediction_history.append(prediction_data)
+                    self._prediction_history = self._prediction_history[-60:]
 
                 for process in new_processes:
                     if self.monitor.is_self(process):
@@ -93,6 +102,7 @@ class ExamService:
                 "mode": self.policy.mode,
                 "session_id": self.session_id,
                 "pressure": self._pressure.value,
+                "prediction": dict(self._latest_prediction),
                 "memory": dict(self._latest_memory),
                 "process_count": len(self._latest_processes),
                 "error": self._error,
@@ -101,3 +111,7 @@ class ExamService:
     def processes(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._latest_processes)
+
+    def predictions(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(reversed(self._prediction_history))

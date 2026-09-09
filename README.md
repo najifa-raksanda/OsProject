@@ -12,12 +12,15 @@ Implemented:
 - Safe `SIGTERM` enforcement with PID creation-time validation
 - Linux PSI, rolling memory-growth, and cgroup v2 memory monitoring
 - Rule-based pressure classification
+- Stateful Phase 6 prediction with sustained-sample escalation, hysteresis, risk scoring, and human-readable explanations
 - Explainable decision engine
 - SQLite event history
 - Flask teacher dashboard and JSON APIs
 - Automated tests
 
 Phase 5 is complete: the monitor reads system memory and PSI, or—when configured—a cgroup's `memory.current`, `memory.max`, `memory.events`, and `memory.pressure`. Cgroup throttling is represented by the decision engine but is deliberately not enforced yet.
+
+Phase 6 is complete: every memory sample receives an instantaneous classification and a stable prediction. Escalation requires consecutive dangerous samples, recovery requires consecutive healthy samples, OOM kills trigger an immediate critical state, and each result includes a 0-100 risk score and explanation. This remains an explainable rule-based predictor, not machine learning.
 
 ## Kali Linux installation
 
@@ -68,6 +71,13 @@ Edit `config/policy.json`. Changes are loaded whenever Exam Mode starts. Applica
 - A cgroup v2 path such as `/sys/fs/cgroup/exam-workloads`: monitor that group's usage, limit, events, OOM kills, and pressure. If the path is missing or unreadable, the service safely falls back to system metrics and identifies the source on the dashboard.
 
 The growth value is calculated across a rolling ten-second observation window, which is more stable than comparing only two adjacent samples.
+
+Prediction behavior is also configured under `pressure_thresholds`:
+
+- `escalation_samples`: dangerous samples required before raising the stable level.
+- `recovery_samples`: healthier samples required before lowering the stable level by one step.
+
+The dashboard distinguishes the raw observation from the stable prediction. This hysteresis prevents one short spike from repeatedly changing the system state.
 
 Modes:
 

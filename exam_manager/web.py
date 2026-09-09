@@ -25,6 +25,7 @@ def create_app(
             status=service.status(),
             processes=service.processes(),
             events=service.logger.recent(30),
+            predictions=service.predictions()[:12],
         )
 
     @app.post("/exam/start")
@@ -49,5 +50,8 @@ def create_app(
     def api_events():
         return jsonify(service.logger.recent(100))
 
-    return app
+    @app.get("/api/predictions")
+    def api_predictions():
+        return jsonify(service.predictions())
 
+    return app

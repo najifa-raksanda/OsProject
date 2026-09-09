@@ -49,6 +49,24 @@
   </section>
   <p class="subtitle">Metric source: <code>{{ status.memory.get('source', 'waiting for first sample') }}</code></p>
 
+  <h2>Phase 6 · Pressure prediction</h2>
+  <section class="cards">
+    <div class="card"><span class="label">Stable prediction</span><span class="value {{ status.prediction.get('level', 'normal') }}">{{ status.prediction.get('level', 'waiting') | upper }}</span></div>
+    <div class="card"><span class="label">Raw observation</span><span class="value {{ status.prediction.get('raw_level', 'normal') }}">{{ status.prediction.get('raw_level', 'waiting') | upper }}</span></div>
+    <div class="card"><span class="label">Risk score</span><span class="value">{{ status.prediction.get('score', 0) }}/100</span></div>
+    <div class="card"><span class="label">Confidence</span><span class="value">{{ '%.0f' | format(status.prediction.get('confidence', 0) * 100) }}%</span></div>
+  </section>
+  <p class="subtitle">{{ status.prediction.get('reason', 'Start Exam Mode to generate a prediction.') }}</p>
+
+  <table style="margin-top:16px">
+    <thead><tr><th>Sample</th><th>Stable</th><th>Raw</th><th>Score</th><th>Explanation</th></tr></thead>
+    <tbody>
+      {% for prediction in predictions %}
+      <tr><td>{{ prediction.timestamp | int }}</td><td class="{{ prediction.level }}">{{ prediction.level }}</td><td class="{{ prediction.raw_level }}">{{ prediction.raw_level }}</td><td>{{ prediction.score }}/100</td><td>{{ prediction.reason }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">No prediction samples yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+
   {% if status.error %}<p class="critical"><strong>Monitor error:</strong> {{ status.error }}</p>{% endif %}
 
   <h2>Recent policy events</h2>

@@ -13,4 +13,4 @@ def test_dashboard_and_api(tmp_path):
     response = client.get("/api/status")
     assert response.status_code == 200
     assert response.get_json()["mode"] == "detect_only"
-
+    assert client.get("/api/predictions").status_code == 200

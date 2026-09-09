@@ -36,6 +36,8 @@
     "high_growth_mb_s": 60,
     "critical_growth_mb_s": 120,
     "high_psi_avg10": 2,
-    "critical_psi_avg10": 10
+    "critical_psi_avg10": 10,
+    "escalation_samples": 2,
+    "recovery_samples": 3
   }
 }
