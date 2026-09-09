@@ -24,7 +24,7 @@ class PressurePredictor:
         psi = max(sample.psi_some_avg10, sample.psi_full_avg10)
         growth = max(0.0, sample.growth_mb_s)
 
-        if (
+        if sample.oom_kill_delta > 0 or (
             sample.used_percent >= t["critical_memory_percent"]
             or growth >= t["critical_growth_mb_s"]
             or psi >= t["critical_psi_avg10"]
@@ -39,4 +39,3 @@ class PressurePredictor:
         if sample.used_percent >= t["elevated_memory_percent"] or growth >= t["elevated_growth_mb_s"]:
             return PressureLevel.ELEVATED
         return PressureLevel.NORMAL
-

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -53,6 +53,11 @@ class MemorySnapshot:
     growth_mb_s: float
     psi_some_avg10: float
     psi_full_avg10: float
+    source: str = "system"
+    current_bytes: int | None = None
+    limit_bytes: int | None = None
+    events: dict[str, int] = field(default_factory=dict)
+    oom_kill_delta: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -69,4 +74,3 @@ class Decision:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         return {key: value.value if isinstance(value, StrEnum) else value for key, value in data.items()}
-

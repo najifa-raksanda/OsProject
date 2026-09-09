@@ -39,6 +39,16 @@
     <div class="card"><span class="label">Processes</span><span class="value">{{ status.process_count }}</span></div>
   </section>
 
+  <h2>Phase 5 · Memory monitoring</h2>
+  <section class="cards">
+    <div class="card"><span class="label">Memory used</span><span class="value">{{ '%.1f' | format(status.memory.get('used_percent', 0)) }}%</span></div>
+    <div class="card"><span class="label">Growth trend</span><span class="value">{{ '%+.2f' | format(status.memory.get('growth_mb_s', 0)) }} MB/s</span></div>
+    <div class="card"><span class="label">PSI some avg10</span><span class="value">{{ '%.2f' | format(status.memory.get('psi_some_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">PSI full avg10</span><span class="value">{{ '%.2f' | format(status.memory.get('psi_full_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">OOM kills</span><span class="value {{ 'critical' if status.memory.get('oom_kill_delta', 0) else '' }}">{{ status.memory.get('events', {}).get('oom_kill', 0) }}</span></div>
+  </section>
+  <p class="subtitle">Metric source: <code>{{ status.memory.get('source', 'waiting for first sample') }}</code></p>
+
   {% if status.error %}<p class="critical"><strong>Monitor error:</strong> {{ status.error }}</p>{% endif %}
 
   <h2>Recent policy events</h2>
@@ -62,4 +72,3 @@
   </table>
 </body>
 </html>
-

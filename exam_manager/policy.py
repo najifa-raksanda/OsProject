@@ -29,6 +29,7 @@ class Policy:
     blocked_action: str
     protected: frozenset[str]
     pressure_thresholds: dict[str, float]
+    memory_cgroup: str | None
 
     @classmethod
     def load(cls, path: str | Path) -> "Policy":
@@ -73,6 +74,7 @@ class Policy:
             blocked_action=str(raw.get("blocked_action", "terminate")).casefold(),
             protected=frozenset(normalize_process_name(str(item)) for item in raw.get("protected", [])),
             pressure_thresholds={key: float(value) for key, value in raw.get("pressure_thresholds", {}).items()},
+            memory_cgroup=str(raw["memory_cgroup"]) if raw.get("memory_cgroup") else None,
         )
 
     def classify(self, process_name: str) -> Classification:
@@ -87,4 +89,3 @@ class Policy:
 
     def priority_for(self, process_name: str) -> str:
         return self.priorities.get(normalize_process_name(process_name), "low")
-

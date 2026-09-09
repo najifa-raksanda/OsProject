@@ -22,7 +22,7 @@ class ExamService:
         self.policy = Policy.load(self.policy_path)
         self.logger = EventLogger(database_path)
         self.monitor = ProcessMonitor()
-        self.memory_monitor = MemoryMonitor()
+        self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
         self.predictor = PressurePredictor(self.policy.pressure_thresholds)
         self.action_manager = ActionManager(self.policy.mode)
         self.session_id = uuid.uuid4().hex[:12]
@@ -41,6 +41,7 @@ class ExamService:
             self.policy = Policy.load(self.policy_path)
             self.predictor = PressurePredictor(self.policy.pressure_thresholds)
             self.action_manager = ActionManager(self.policy.mode)
+            self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
             self.session_id = uuid.uuid4().hex[:12]
             self._active = True
             self._error = None
@@ -100,4 +101,3 @@ class ExamService:
     def processes(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._latest_processes)
-

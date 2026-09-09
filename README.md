@@ -10,14 +10,14 @@ Implemented:
 - JSON policy validation and allowed/blocked/unknown classification
 - Detect-only mode by default
 - Safe `SIGTERM` enforcement with PID creation-time validation
-- Linux PSI and memory-growth monitoring
+- Linux PSI, rolling memory-growth, and cgroup v2 memory monitoring
 - Rule-based pressure classification
 - Explainable decision engine
 - SQLite event history
 - Flask teacher dashboard and JSON APIs
 - Automated tests
 
-Phase-two item: cgroup throttling is represented by the decision engine but is deliberately not enforced yet.
+Phase 5 is complete: the monitor reads system memory and PSI, or—when configured—a cgroup's `memory.current`, `memory.max`, `memory.events`, and `memory.pressure`. Cgroup throttling is represented by the decision engine but is deliberately not enforced yet.
 
 ## Kali Linux installation
 
@@ -62,6 +62,13 @@ Only after the detect-only demonstration succeeds, change `"mode": "enforce"`, r
 
 Edit `config/policy.json`. Changes are loaded whenever Exam Mode starts. Application names are case-insensitive and `.exe` is removed during matching.
 
+`memory_cgroup` controls the Phase 5 metric source:
+
+- `null`: monitor whole-system RAM and `/proc/pressure/memory`.
+- A cgroup v2 path such as `/sys/fs/cgroup/exam-workloads`: monitor that group's usage, limit, events, OOM kills, and pressure. If the path is missing or unreadable, the service safely falls back to system metrics and identifies the source on the dashboard.
+
+The growth value is calculated across a rolling ten-second observation window, which is more stable than comparing only two adjacent samples.
+
 Modes:
 
 - `detect_only`: records the intended action but does not change processes.
@@ -89,4 +96,3 @@ memory + PSI ----------┘                   v
 - Unknown processes are logged rather than terminated.
 - Cgroup intervention will be limited to a dedicated test cgroup in phase two.
 - Run memory-pressure experiments inside a disposable VM snapshot.
-
