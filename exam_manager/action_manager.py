@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 import psutil
 
-from .models import Action, Decision, ProcessSnapshot
+from .cgroup_manager import CgroupManager
+from .models import Action, Decision, MemorySnapshot, ProcessSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,11 +18,17 @@ class ActionResult:
 
 
 class ActionManager:
-    def __init__(self, mode: str) -> None:
+    def __init__(self, mode: str, cgroup_manager: CgroupManager | None = None) -> None:
         self.mode = mode
+        self.cgroup_manager = cgroup_manager
 
-    def execute(self, process: ProcessSnapshot, decision: Decision) -> ActionResult:
-        if decision.action not in {Action.TERMINATE, Action.PAUSE, Action.THROTTLE}:
+    def execute(
+        self,
+        process: ProcessSnapshot,
+        decision: Decision,
+        memory: MemorySnapshot | None = None,
+    ) -> ActionResult:
+        if decision.action not in {Action.TERMINATE, Action.PAUSE, Action.THROTTLE, Action.PROTECT}:
             return ActionResult(False, True, "No enforcement required")
         if self.mode != "enforce":
             return ActionResult(False, True, f"Detect-only: would {decision.action.value} PID {process.pid}")
@@ -38,9 +45,13 @@ class ActionManager:
             if decision.action is Action.PAUSE:
                 live.send_signal(signal.SIGSTOP)
                 return ActionResult(True, True, "SIGSTOP sent")
-            return ActionResult(False, False, "Cgroup throttling is scheduled for phase two")
+            if self.cgroup_manager is None:
+                return ActionResult(False, False, "No managed cgroup is configured")
+            if memory is None:
+                return ActionResult(False, False, "No memory snapshot is available for cgroup limits")
+            result = self.cgroup_manager.apply(decision.action, process.pid, memory.total_bytes)
+            return ActionResult(True, result.success, result.message)
         except psutil.NoSuchProcess:
             return ActionResult(False, False, "Process exited before action")
         except (psutil.AccessDenied, PermissionError) as exc:
             return ActionResult(True, False, f"Permission denied: {exc}")
-

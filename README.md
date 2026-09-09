@@ -22,6 +22,8 @@ Phase 5 is complete: the monitor reads system memory and PSI, or—when configur
 
 Phase 6 is complete: every memory sample receives an instantaneous classification and a stable prediction. Escalation requires consecutive dangerous samples, recovery requires consecutive healthy samples, OOM kills trigger an immediate critical state, and each result includes a 0-100 risk score and explanation. This remains an explainable rule-based predictor, not machine learning.
 
+Phase 7 is complete in guarded form: the decision engine protects high/critical workloads during pressure and throttles low-priority workloads. The cgroup manager creates isolated `protected` and `restricted` groups, applies `memory.low`, `memory.high`, and `memory.max`, and moves only a revalidated target PID. Detect-only remains the default, so these controls are not written until enforcement is explicitly enabled.
+
 ## Kali Linux installation
 
 ```bash
@@ -78,6 +80,55 @@ Prediction behavior is also configured under `pressure_thresholds`:
 - `recovery_samples`: healthier samples required before lowering the stable level by one step.
 
 The dashboard distinguishes the raw observation from the stable prediction. This hysteresis prevents one short spike from repeatedly changing the system state.
+
+## Phase 7 cgroup setup
+
+Creating cgroups requires a one-time privileged setup inside the disposable Kali VM:
+
+```bash
+sudo bash tools/setup_cgroup.sh
+```
+
+Confirm the directories:
+
+```bash
+find /sys/fs/cgroup/exam-resource-manager -maxdepth 2 -type d
+```
+
+The application itself should still run as the normal user. In `detect_only` mode, it reports intended `PROTECT`, `THROTTLE`, `PAUSE`, and `TERMINATE` actions without changing a process. Use `enforce` only with the harmless demonstration workload after taking a VM snapshot.
+
+The service establishes the first process sample as a baseline, so starting Exam Mode does not incorrectly report every existing desktop process as newly opened. When pressure becomes HIGH or CRITICAL, it re-evaluates already-running allowed workloads, applies priority decisions, and uses a 30-second per-process/action cooldown to prevent repeated intervention and duplicate logs.
+
+### Controlled Phase 7 demonstration
+
+Create a distinct executable name for the safe workload:
+
+```bash
+cp "$(command -v python3)" /tmp/student-memory-demo
+```
+
+Start Exam Mode in `detect_only`, then run in another terminal:
+
+```bash
+/tmp/student-memory-demo tools/memory_stress.py --total-mb 300 --step-mb 10
+```
+
+The workload is explicitly allowed but has `low` priority. Under HIGH/CRITICAL pressure, the decision engine selects THROTTLE while high-priority workloads are selected for PROTECT. Detect-only records both without writing cgroup controls.
+
+Real cgroup movement may require elevated privileges because Linux checks permissions at the processes' common cgroup ancestor. For a controlled VM-only enforcement test, take a snapshot first, run the one-time setup script, switch the policy to `enforce`, and start the local-only service with the virtual environment's interpreter:
+
+```bash
+sudo bash tools/setup_cgroup.sh
+sudo "$(pwd)/.venv/bin/python" run.py
+```
+
+Do not expose the Flask development server beyond `127.0.0.1`, and do not use enforcement against system or important desktop processes. A production design should separate privileged cgroup operations into a minimal helper instead of running the dashboard service with elevated privileges.
+
+Resource-control policy:
+
+- `protected_memory_low_percent`: best-effort memory protection through `memory.low`.
+- `restricted_memory_high_percent`: reclaim/throttling boundary through `memory.high`.
+- `restricted_memory_max_percent`: hard ceiling through `memory.max`.
 
 Modes:
 

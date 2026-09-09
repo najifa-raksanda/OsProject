@@ -30,6 +30,5 @@ def test_low_priority_allowed_process_is_throttled_under_pressure(tmp_path):
     assert decide(process("student"), policy(tmp_path), PressureLevel.HIGH).action is Action.THROTTLE
 
 
-def test_high_priority_allowed_process_is_not_throttled(tmp_path):
-    assert decide(process("code"), policy(tmp_path), PressureLevel.HIGH).action is Action.ALLOW
-
+def test_high_priority_allowed_process_is_protected_under_pressure(tmp_path):
+    assert decide(process("code"), policy(tmp_path), PressureLevel.HIGH).action is Action.PROTECT

@@ -3,11 +3,18 @@
   "mode": "detect_only",
   "sample_interval_seconds": 2,
   "memory_cgroup": null,
+  "cgroup_root": "/sys/fs/cgroup/exam-resource-manager",
+  "resource_controls": {
+    "restricted_memory_high_percent": 60,
+    "restricted_memory_max_percent": 90,
+    "protected_memory_low_percent": 20
+  },
   "allowed": [
     "bash",
     "code",
     "gcc",
     "python3",
+    "student-memory-demo",
     "terminal"
   ],
   "blocked": [
@@ -20,7 +27,8 @@
   "priorities": {
     "code": "high",
     "gcc": "high",
-    "python3": "normal"
+    "python3": "normal",
+    "student-memory-demo": "low"
   },
   "unknown_action": "log",
   "blocked_action": "terminate",

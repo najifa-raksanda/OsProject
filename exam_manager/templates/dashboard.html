@@ -67,6 +67,15 @@
     </tbody>
   </table>
 
+  <h2>Phase 7 · Resource control</h2>
+  <section class="cards">
+    <div class="card"><span class="label">Cgroup configured</span><span class="value {{ 'active' if status.cgroup.get('configured') else 'inactive' }}">{{ 'YES' if status.cgroup.get('configured') else 'NO' }}</span></div>
+    <div class="card"><span class="label">Cgroup v2</span><span class="value {{ 'active' if status.cgroup.get('cgroup_v2') else 'inactive' }}">{{ 'AVAILABLE' if status.cgroup.get('cgroup_v2') else 'UNAVAILABLE' }}</span></div>
+    <div class="card"><span class="label">Memory controller</span><span class="value {{ 'active' if status.cgroup.get('memory_controller') else 'inactive' }}">{{ 'AVAILABLE' if status.cgroup.get('memory_controller') else 'UNAVAILABLE' }}</span></div>
+    <div class="card"><span class="label">Managed groups</span><span class="value {{ 'active' if status.cgroup.get('prepared') else 'inactive' }}">{{ 'READY' if status.cgroup.get('prepared') else 'NOT CREATED' }}</span></div>
+  </section>
+  <p class="subtitle">Cgroup root: <code>{{ status.cgroup.get('root', 'not configured') }}</code>. Detect-only mode never writes resource controls.</p>
+
   {% if status.error %}<p class="critical"><strong>Monitor error:</strong> {{ status.error }}</p>{% endif %}
 
   <h2>Recent policy events</h2>

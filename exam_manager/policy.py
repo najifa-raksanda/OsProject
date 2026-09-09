@@ -30,6 +30,8 @@ class Policy:
     protected: frozenset[str]
     pressure_thresholds: dict[str, float]
     memory_cgroup: str | None
+    cgroup_root: str | None
+    resource_controls: dict[str, float]
 
     @classmethod
     def load(cls, path: str | Path) -> "Policy":
@@ -63,6 +65,11 @@ class Policy:
         if invalid:
             raise ValueError(f"Invalid process priorities: {invalid}")
 
+        controls = {key: float(value) for key, value in raw.get("resource_controls", {}).items()}
+        for key, value in controls.items():
+            if not 1 <= value <= 100:
+                raise ValueError(f"Resource control percentage {key} must be between 1 and 100")
+
         return cls(
             exam_name=str(raw.get("exam_name", "Exam Session")),
             mode=mode,
@@ -75,6 +82,8 @@ class Policy:
             protected=frozenset(normalize_process_name(str(item)) for item in raw.get("protected", [])),
             pressure_thresholds={key: float(value) for key, value in raw.get("pressure_thresholds", {}).items()},
             memory_cgroup=str(raw["memory_cgroup"]) if raw.get("memory_cgroup") else None,
+            cgroup_root=str(raw["cgroup_root"]) if raw.get("cgroup_root") else None,
+            resource_controls=controls,
         )
 
     def classify(self, process_name: str) -> Classification:

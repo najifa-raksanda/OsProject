@@ -15,7 +15,8 @@ def decide(process: ProcessSnapshot, policy: Policy, pressure: PressureLevel) ->
         return Decision(action, "Application is blocked by the exam policy", classification, priority, pressure)
     if classification is Classification.UNKNOWN:
         return Decision(Action.LOG, "Unknown application requires teacher review", classification, priority, pressure)
+    if pressure in {PressureLevel.HIGH, PressureLevel.CRITICAL} and priority == "high":
+        return Decision(Action.PROTECT, "High-priority workload protected during memory pressure", classification, priority, pressure)
     if pressure in {PressureLevel.HIGH, PressureLevel.CRITICAL} and priority == "low":
         return Decision(Action.THROTTLE, "Low-priority workload under memory pressure", classification, priority, pressure)
     return Decision(Action.ALLOW, "Application is allowed by the exam policy", classification, priority, pressure)
-
