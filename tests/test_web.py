@@ -14,3 +14,9 @@ def test_dashboard_and_api(tmp_path):
     assert response.status_code == 200
     assert response.get_json()["mode"] == "detect_only"
     assert client.get("/api/predictions").status_code == 200
+    assert client.get("/api/evaluation").status_code == 200
+    assert client.get("/export/events.csv").status_code == 200
+    assert client.get("/export/samples.csv").status_code == 200
+    report = client.get("/export/report.json")
+    assert report.status_code == 200
+    assert "attachment" in report.headers["Content-Disposition"]

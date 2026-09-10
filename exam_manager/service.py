@@ -6,6 +6,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import psutil
+
 from .action_manager import ActionManager
 from .cgroup_manager import CgroupManager
 from .decision_engine import decide
@@ -22,6 +24,8 @@ class ExamService:
         self.policy_path = Path(policy_path)
         self.policy = Policy.load(self.policy_path)
         self.logger = EventLogger(database_path)
+        self._self_process = psutil.Process()
+        self._self_process.cpu_percent(None)
         self.monitor = ProcessMonitor()
         self.cgroup_manager = self._make_cgroup_manager()
         self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
@@ -115,8 +119,30 @@ class ExamService:
                     if now - self._last_actions.get(action_key, float("-inf")) < 30:
                         continue
                     result = self.action_manager.execute(process, decision, memory)
-                    self.logger.record(self.session_id, process, memory, decision, result)
+                    detection_latency_ms = (
+                        max(0.0, (time.time() - process.create_time) * 1000) if is_new else None
+                    )
+                    self.logger.record(
+                        self.session_id, process, memory, decision, result, detection_latency_ms
+                    )
                     self._last_actions[action_key] = now
+
+                loop_duration_ms = (time.monotonic() - started) * 1000
+                try:
+                    monitor_cpu = self._self_process.cpu_percent(None)
+                    monitor_memory = self._self_process.memory_info().rss
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    monitor_cpu = 0.0
+                    monitor_memory = 0
+                self.logger.record_sample(
+                    self.session_id,
+                    memory,
+                    prediction,
+                    loop_duration_ms,
+                    monitor_cpu,
+                    monitor_memory,
+                    len(processes),
+                )
             except Exception as exc:  # keep the monitor alive and expose the failure to the dashboard
                 with self._lock:
                     self._error = f"{type(exc).__name__}: {exc}"
@@ -135,6 +161,7 @@ class ExamService:
                 "cgroup": self.cgroup_manager.status() if self.cgroup_manager else {"configured": False},
                 "memory": dict(self._latest_memory),
                 "process_count": len(self._latest_processes),
+                "evaluation": self.logger.summary(self.session_id),
                 "error": self._error,
             }
 
@@ -145,6 +172,9 @@ class ExamService:
     def predictions(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(reversed(self._prediction_history))
+
+    def samples(self, limit: int = 120) -> list[dict[str, Any]]:
+        return self.logger.recent_samples(self.session_id, limit)
 
     def _make_cgroup_manager(self) -> CgroupManager | None:
         if not self.policy.cgroup_root:

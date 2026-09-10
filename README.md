@@ -24,6 +24,8 @@ Phase 6 is complete: every memory sample receives an instantaneous classificatio
 
 Phase 7 is complete in guarded form: the decision engine protects high/critical workloads during pressure and throttles low-priority workloads. The cgroup manager creates isolated `protected` and `restricted` groups, applies `memory.low`, `memory.high`, and `memory.max`, and moves only a revalidated target PID. Detect-only remains the default, so these controls are not written until enforcement is explicitly enabled.
 
+Phase 8 is complete: each monitoring cycle is stored as an evaluation sample, including memory, PSI, prediction, loop time, monitor CPU/RAM overhead, and process count. The dashboard calculates session-specific peaks, detection latency, policy-event counts, action success rate, and pressure distribution. Event CSV, sample CSV, and JSON summary downloads provide evidence for the final report.
+
 ## Kali Linux installation
 
 ```bash
@@ -123,6 +125,21 @@ sudo "$(pwd)/.venv/bin/python" run.py
 ```
 
 Do not expose the Flask development server beyond `127.0.0.1`, and do not use enforcement against system or important desktop processes. A production design should separate privileged cgroup operations into a minimal helper instead of running the dashboard service with elevated privileges.
+
+## Phase 8 evaluation
+
+During an exam session, the dashboard records and displays:
+
+- Sample and policy-event counts
+- Blocked and unknown application counts
+- Average process-detection latency
+- Average and maximum monitoring-loop duration
+- Average monitor CPU and peak monitor RAM overhead
+- Peak system memory, growth, PSI, and prediction-risk score
+- Stable pressure-level distribution
+- Attempted actions and successful-action percentage
+
+Use the dashboard buttons to download `events-<session>.csv`, `samples-<session>.csv`, and `report-<session>.json`. These exports contain only the current session. Follow [EVALUATION.md](EVALUATION.md) for the controlled experiments and final evidence checklist.
 
 Resource-control policy:
 
