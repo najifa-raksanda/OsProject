@@ -4,7 +4,7 @@ A lightweight Linux service that monitors processes during an exam, applies an a
 
 ## Five-day MVP status
 
-For a plain-language feature summary, see [FEATURES.md](FEATURES.md). For the combined code-level review and improvement status, see [IMPROVEMENTS.md](IMPROVEMENTS.md).
+For a plain-language feature summary, see [FEATURES.md](FEATURES.md). For a teacher-facing walkthrough, see [DEMO_GUIDE.md](DEMO_GUIDE.md). For the combined code-level review and improvement status, see [IMPROVEMENTS.md](IMPROVEMENTS.md).
 
 Implemented:
 

@@ -30,6 +30,17 @@
     .downloads { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
     .downloads a { color: #dbeafe; background: #1e3a5f; border: 1px solid #315784; padding: 9px 12px; border-radius: 8px; text-decoration: none; }
     canvas { width: 100%; height: 240px; background: linear-gradient(180deg,#111f35,#0d1729); border: 1px solid #263d5c; border-radius: 14px; }
+    .alert-banner { display: none; margin-top: 18px; padding: 15px 17px; border-radius: 12px; border: 1px solid #7f1d1d; background: rgba(127,29,29,.28); color: #fecaca; }
+    .alert-banner.visible { display: block; }
+    .alert-banner strong { color: #fff; }
+    .section-head { display: flex; gap: 14px; justify-content: space-between; align-items: end; flex-wrap: wrap; margin-top: 34px; }
+    .section-head h2 { margin: 0; }
+    .toolbar { display: flex; gap: 9px; flex-wrap: wrap; }
+    .toolbar input, .toolbar select { color: #e8edf8; background: #111f35; border: 1px solid #31506f; border-radius: 9px; padding: 9px 11px; min-height: 38px; }
+    .toolbar input { min-width: 230px; }
+    .helper { color: #8ea0b9; font-size: 12px; margin: 8px 0 12px; }
+    .allowed { color: #4ade80; } .unknown, .warn, .log { color: #fbbf24; } .protected, .protect { color: #60a5fa; } .throttle, .pause { color: #fb923c; }
+    .process-name { font-weight: 700; color: #f8fafc; }
     @media (max-width: 720px) { body { padding: 18px 12px 40px; } header { padding: 18px; } h1 { font-size: 24px; } table { display: block; overflow-x: auto; white-space: nowrap; } }
   </style>
 </head>
@@ -47,6 +58,7 @@
     <div class="card"><span class="label">Memory pressure</span><span id="pressure-status" class="value {{ status.pressure }}">{{ status.pressure | upper }}</span></div>
     <div class="card"><span class="label">Processes</span><span id="process-count" class="value">{{ status.process_count }}</span></div>
   </section>
+  <div id="latest-alert" class="alert-banner" role="status" aria-live="polite"></div>
 
   <h2>Phase 5 · Memory monitoring</h2>
   <section class="cards">
@@ -114,13 +126,26 @@
     </tbody>
   </table>
 
-  <h2>Running processes</h2>
+  <div class="section-head">
+    <h2>Running processes</h2>
+    <div class="toolbar">
+      <input id="process-search" type="search" placeholder="Search name or PID" aria-label="Search running processes">
+      <select id="process-filter" aria-label="Filter processes by policy classification">
+        <option value="all">All classifications</option>
+        <option value="blocked">Blocked</option>
+        <option value="unknown">Unknown</option>
+        <option value="allowed">Allowed</option>
+        <option value="protected">Protected</option>
+      </select>
+    </div>
+  </div>
+  <p class="helper">Blocked and unknown processes appear first. Search for python3, gcc, chrome, sleep, or a PID during a live demonstration.</p>
   <table>
-    <thead><tr><th>PID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Status</th></tr></thead>
+    <thead><tr><th>PID</th><th>Name</th><th>Policy</th><th>Priority</th><th>CPU</th><th>Memory</th><th>Status</th><th>Recommended action</th></tr></thead>
     <tbody id="process-rows">
-      {% for process in processes[:40] %}
-      <tr><td>{{ process.pid }}</td><td>{{ process.name }}</td><td>{{ '%.1f' | format(process.cpu_percent) }}%</td><td>{{ '%.1f' | format(process.memory_bytes / 1048576) }} MB</td><td>{{ process.status }}</td></tr>
-      {% else %}<tr><td colspan="5" class="empty">Start Exam Mode to collect a process snapshot.</td></tr>{% endfor %}
+      {% for process in processes[:100] %}
+      <tr><td>{{ process.pid }}</td><td class="process-name">{{ process.name }}</td><td class="{{ process.classification }}">{{ process.classification }}</td><td>{{ process.priority }}</td><td>{{ '%.1f' | format(process.cpu_percent) }}%</td><td>{{ '%.1f' | format(process.memory_bytes / 1048576) }} MB</td><td>{{ process.status }}</td><td class="{{ process.recommended_action }}">{{ process.recommended_action }}</td></tr>
+      {% else %}<tr><td colspan="8" class="empty">Start Exam Mode to collect a process snapshot.</td></tr>{% endfor %}
     </tbody>
   </table>
   <script>
@@ -173,6 +198,40 @@
 
     function formatMb(bytes) { return (Number(bytes || 0) / 1048576).toFixed(1) + ' MB'; }
 
+    let liveProcesses = [];
+
+    function renderProcesses() {
+      const query = (document.getElementById('process-search').value || '').trim().toLowerCase();
+      const selected = document.getElementById('process-filter').value;
+      const filtered = liveProcesses.filter(item => {
+        const matchesQuery = !query || String(item.name).toLowerCase().includes(query) || String(item.pid).includes(query);
+        const matchesClass = selected === 'all' || item.classification === selected;
+        return matchesQuery && matchesClass;
+      }).slice(0, 100);
+      replaceRows('process-rows', filtered.map(item => [
+        item.pid, item.name, item.classification, item.priority,
+        `${Number(item.cpu_percent || 0).toFixed(1)}%`, formatMb(item.memory_bytes),
+        item.status, item.recommended_action
+      ]), [1, 2, 3, 4, 5, 6, 7, 8], 'No matching running process.', {
+        1: () => 'process-name', 2: value => value, 7: value => value
+      });
+    }
+
+    function showLatestBlockedEvent(events) {
+      const alert = document.getElementById('latest-alert');
+      const blocked = events.find(item => item.classification === 'blocked');
+      if (!blocked) {
+        alert.className = 'alert-banner';
+        alert.textContent = '';
+        return;
+      }
+      alert.className = 'alert-banner visible';
+      alert.replaceChildren();
+      const title = document.createElement('strong');
+      title.textContent = 'Blocked application detected: ';
+      alert.append(title, document.createTextNode(`${blocked.process_name} (PID ${blocked.pid}). Recommended action: ${blocked.decision}. ${blocked.result_message}`));
+    }
+
     async function refreshTables() {
       try {
         const [processResponse, eventResponse, predictionResponse] = await Promise.all([
@@ -191,9 +250,9 @@
           String(item.timestamp || '').slice(11, 19), `${item.process_name} (${item.pid})`,
           item.classification, item.decision, item.result_message
         ]), [1, 2, 3, 4, 5], 'No events yet.', { 2: value => value, 3: value => value });
-        replaceRows('process-rows', processes.slice(0, 40).map(item => [
-          item.pid, item.name, `${Number(item.cpu_percent || 0).toFixed(1)}%`, formatMb(item.memory_bytes), item.status
-        ]), [1, 2, 3, 4, 5], 'Start Exam Mode to collect a process snapshot.');
+        liveProcesses = processes;
+        renderProcesses();
+        showLatestBlockedEvent(events);
       } catch (error) {
         // The server-rendered page remains usable if a live refresh fails.
       }
@@ -223,6 +282,9 @@
         set('live-status', 'LIVE · waiting for service');
       }
     }
+    document.getElementById('process-search').addEventListener('input', renderProcesses);
+    document.getElementById('process-filter').addEventListener('change', renderProcesses);
+    refreshLiveStatus();
     setInterval(refreshLiveStatus, 5000);
   </script>
 </body>

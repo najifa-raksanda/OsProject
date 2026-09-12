@@ -21,6 +21,8 @@ This file records the code-level and systems-level improvements applied on the `
 10. A production WSGI entrypoint, Gunicorn dependency, and systemd service template are included for supervised Linux deployment.
 11. The dashboard now refreshes process, event, and prediction tables through JSON APIs without a full-page reload.
 12. GitHub Actions now runs dependency installation, compilation, and the test suite on pushes and pull requests.
+13. The process table now includes policy classification, priority, and recommended action, with search and classification filters so high-PID demo processes remain visible.
+14. A teacher-facing blocked-application alert and `DEMO_GUIDE.md` were added for clearer live demonstrations.
 
 ## Remaining hardening work
 

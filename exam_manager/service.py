@@ -105,8 +105,24 @@ class ExamService:
                 pressure = prediction.level
                 prediction_data = {"timestamp": memory.timestamp, **prediction.to_dict()}
 
+                process_rows: list[dict[str, Any]] = []
+                for item in processes:
+                    process_decision = decide(item, self.policy, pressure)
+                    process_rows.append({
+                        **item.to_dict(),
+                        "classification": process_decision.classification.value,
+                        "priority": process_decision.priority,
+                        "recommended_action": process_decision.action.value,
+                    })
+                class_rank = {"blocked": 0, "unknown": 1, "protected": 2, "allowed": 3}
+                process_rows.sort(key=lambda item: (
+                    class_rank.get(str(item["classification"]), 4),
+                    -int(item["memory_bytes"]),
+                    int(item["pid"]),
+                ))
+
                 with self._lock:
-                    self._latest_processes = [item.to_dict() for item in processes]
+                    self._latest_processes = process_rows
                     self._latest_memory = memory.to_dict()
                     self._pressure = pressure
                     self._latest_prediction = prediction_data
