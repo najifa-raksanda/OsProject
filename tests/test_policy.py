@@ -37,3 +37,21 @@ def test_policy_rejects_invalid_mode(tmp_path):
     with pytest.raises(ValueError, match="mode"):
         Policy.load(write_policy(tmp_path, mode="dangerous"))
 
+
+def test_policy_validates_and_loads_configured_actions(tmp_path):
+    policy = Policy.load(write_policy(
+        tmp_path,
+        unknown_action="warn",
+        blocked_action="pause",
+        terminate_grace_seconds=4,
+    ))
+
+    assert policy.unknown_action == "warn"
+    assert policy.blocked_action == "pause"
+    assert policy.terminate_grace_seconds == 4
+
+
+def test_policy_rejects_unknown_action(tmp_path):
+    with pytest.raises(ValueError, match="unknown_action"):
+        Policy.load(write_policy(tmp_path, unknown_action="explode"))
+

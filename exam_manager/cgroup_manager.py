@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 from .models import Action
@@ -21,15 +22,20 @@ class CgroupManager:
         controls: dict[str, float] | None = None,
         hierarchy_root: str | Path = "/sys/fs/cgroup",
     ) -> None:
-        self.hierarchy_root = Path(hierarchy_root).resolve()
-        self.root = Path(root).resolve()
+        self.hierarchy_root = Path(os.path.realpath(hierarchy_root))
+        self.root = Path(os.path.realpath(root))
         self.controls = {
             "restricted_memory_high_percent": 60.0,
             "restricted_memory_max_percent": 90.0,
             "protected_memory_low_percent": 20.0,
         } | (controls or {})
-        if self.root == self.hierarchy_root or not self.root.is_relative_to(self.hierarchy_root):
+        try:
+            inside = os.path.commonpath((str(self.hierarchy_root), str(self.root))) == str(self.hierarchy_root)
+        except ValueError:
+            inside = False
+        if self.root == self.hierarchy_root or not inside:
             raise ValueError(f"Managed cgroup must be below {self.hierarchy_root}")
+        self._original_cgroups: dict[tuple[int, float], Path] = {}
 
     def status(self) -> dict[str, object]:
         controllers_path = self.hierarchy_root / "cgroup.controllers"
@@ -48,6 +54,40 @@ class CgroupManager:
     @staticmethod
     def _write(path: Path, value: str | int) -> None:
         path.write_text(str(value), encoding="utf-8")
+
+    def _remember_original(self, pid: int, create_time: float | None = None) -> None:
+        if create_time is None:
+            return
+        key = (pid, create_time)
+        if key in self._original_cgroups:
+            return
+        try:
+            lines = Path(f"/proc/{pid}/cgroup").read_text(encoding="utf-8").splitlines()
+            unified = next((line.split(":", 2)[2] for line in lines if line.startswith("0::")), None)
+            if unified is not None:
+                original = self.hierarchy_root / unified.lstrip("/")
+                if original.is_dir():
+                    self._original_cgroups[key] = original
+        except (FileNotFoundError, PermissionError, OSError):
+            return
+
+    def restore_all(self) -> list[str]:
+        restored: list[str] = []
+        for (pid, create_time), original in list(self._original_cgroups.items()):
+            try:
+                import psutil
+
+                process = psutil.Process(pid)
+                if abs(process.create_time() - create_time) > 0.01:
+                    continue
+                target = original / "cgroup.procs"
+                if target.exists():
+                    self._write(target, pid)
+                    restored.append(str(pid))
+            except (FileNotFoundError, PermissionError, OSError, psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        self._original_cgroups.clear()
+        return restored
 
     def _enable_memory(self, parent: Path) -> None:
         control = parent / "cgroup.subtree_control"
@@ -72,7 +112,13 @@ class CgroupManager:
         (self.root / "restricted").mkdir(exist_ok=True)
         (self.root / "protected").mkdir(exist_ok=True)
 
-    def apply(self, action: Action, pid: int, effective_total_bytes: int) -> CgroupResult:
+    def apply(
+        self,
+        action: Action,
+        pid: int,
+        effective_total_bytes: int,
+        create_time: float | None = None,
+    ) -> CgroupResult:
         if action not in {Action.THROTTLE, Action.PROTECT}:
             return CgroupResult(False, f"Action {action.value} is not a cgroup operation")
         if pid <= 1:
@@ -82,6 +128,7 @@ class CgroupManager:
 
         try:
             self.prepare()
+            self._remember_original(pid, create_time)
             if action is Action.THROTTLE:
                 target = self.root / "restricted"
                 high = int(effective_total_bytes * self.controls["restricted_memory_high_percent"] / 100)

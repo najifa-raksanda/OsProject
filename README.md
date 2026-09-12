@@ -4,6 +4,8 @@ A lightweight Linux service that monitors processes during an exam, applies an a
 
 ## Five-day MVP status
 
+For a plain-language feature summary, see [FEATURES.md](FEATURES.md). For the combined code-level review and improvement status, see [IMPROVEMENTS.md](IMPROVEMENTS.md).
+
 Implemented:
 
 - Process discovery and resource snapshots with `psutil`
@@ -22,7 +24,7 @@ Phase 5 is complete: the monitor reads system memory and PSI, or—when configur
 
 Phase 6 is complete: every memory sample receives an instantaneous classification and a stable prediction. Escalation requires consecutive dangerous samples, recovery requires consecutive healthy samples, OOM kills trigger an immediate critical state, and each result includes a 0-100 risk score and explanation. This remains an explainable rule-based predictor, not machine learning.
 
-Phase 7 is complete in guarded form: the decision engine protects high/critical workloads during pressure and throttles low-priority workloads. The cgroup manager creates isolated `protected` and `restricted` groups, applies `memory.low`, `memory.high`, and `memory.max`, and moves only a revalidated target PID. Detect-only remains the default, so these controls are not written until enforcement is explicitly enabled.
+Phase 7 is complete in guarded form: the decision engine protects high/critical workloads during pressure and throttles low-priority workloads. The cgroup manager creates isolated `protected` and `restricted` groups, applies `memory.low`, `memory.high`, and `memory.max`, and moves only a revalidated target PID. Detect-only remains the default, so these controls are not written until enforcement is explicitly enabled. Cgroup containment uses resolved real paths, and moved processes are restored on a best-effort basis when an exam stops.
 
 Phase 8 is complete: each monitoring cycle is stored as an evaluation sample, including memory, PSI, prediction, loop time, monitor CPU/RAM overhead, and process count. The dashboard calculates session-specific peaks, detection latency, policy-event counts, action success rate, and pressure distribution. Event CSV, sample CSV, and JSON summary downloads provide evidence for the final report.
 
@@ -67,7 +69,7 @@ Only after the detect-only demonstration succeeds, change `"mode": "enforce"`, r
 
 ## Configuration
 
-Edit `config/policy.json`. Changes are loaded whenever Exam Mode starts. Application names are case-insensitive and `.exe` is removed during matching.
+Edit `config/policy.json`. Changes are loaded whenever Exam Mode starts. Application names are case-insensitive and `.exe` is removed during matching. `unknown_action` and `blocked_action` accept `log`, `warn`, `pause`, or `terminate`. `terminate_grace_seconds` controls how long the service waits after SIGTERM before escalating to SIGKILL.
 
 `memory_cgroup` controls the Phase 5 metric source:
 

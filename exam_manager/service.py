@@ -30,7 +30,11 @@ class ExamService:
         self.cgroup_manager = self._make_cgroup_manager()
         self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
         self.predictor = PressurePredictor(self.policy.pressure_thresholds)
-        self.action_manager = ActionManager(self.policy.mode, self.cgroup_manager)
+        self.action_manager = ActionManager(
+            self.policy.mode,
+            self.cgroup_manager,
+            self.policy.terminate_grace_seconds,
+        )
         self.session_id = uuid.uuid4().hex[:12]
         self._active = False
         self._thread: threading.Thread | None = None
@@ -51,7 +55,11 @@ class ExamService:
             self.policy = Policy.load(self.policy_path)
             self.predictor = PressurePredictor(self.policy.pressure_thresholds)
             self.cgroup_manager = self._make_cgroup_manager()
-            self.action_manager = ActionManager(self.policy.mode, self.cgroup_manager)
+            self.action_manager = ActionManager(
+                self.policy.mode,
+                self.cgroup_manager,
+                self.policy.terminate_grace_seconds,
+            )
             self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
             self.session_id = uuid.uuid4().hex[:12]
             self._latest_prediction = {}
@@ -70,6 +78,8 @@ class ExamService:
             self._active = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=self.policy.sample_interval_seconds + 1)
+        if self.cgroup_manager:
+            self.cgroup_manager.restore_all()
         return was_active
 
     def _run(self) -> None:
@@ -78,7 +88,15 @@ class ExamService:
             try:
                 processes = self.monitor.snapshot()
                 observed_new = self.monitor.new_processes(processes)
-                new_processes = observed_new if self._baseline_ready else []
+                if self._baseline_ready:
+                    new_processes = observed_new
+                else:
+                    # Existing blocked or unknown applications must not disappear into
+                    # the baseline when an exam starts. Allowed applications remain quiet.
+                    new_processes = [
+                        item for item in processes
+                        if self.policy.classify(item.name) in {Classification.BLOCKED, Classification.UNKNOWN}
+                    ]
                 self._baseline_ready = True
                 memory = self.memory_monitor.sample()
                 prediction = self.predictor.predict(memory)

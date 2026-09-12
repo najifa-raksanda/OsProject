@@ -26,6 +26,18 @@ def test_unknown_process_is_logged(tmp_path):
     assert decide(process("mystery"), policy(tmp_path), PressureLevel.NORMAL).action is Action.LOG
 
 
+def test_unknown_process_uses_policy_action(tmp_path):
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps({
+        "unknown_action": "warn",
+        "allowed": ["code"],
+        "blocked": [],
+    }), encoding="utf-8")
+    configured = Policy.load(path)
+
+    assert decide(process("mystery"), configured, PressureLevel.NORMAL).action is Action.WARN
+
+
 def test_low_priority_allowed_process_is_throttled_under_pressure(tmp_path):
     assert decide(process("student"), policy(tmp_path), PressureLevel.HIGH).action is Action.THROTTLE
 

@@ -32,6 +32,7 @@
   },
   "unknown_action": "log",
   "blocked_action": "terminate",
+  "terminate_grace_seconds": 2,
   "protected": [
     "exam-resource-manager",
     "systemd"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import signal
+import time
 from dataclasses import dataclass
 
 import psutil
@@ -18,9 +19,15 @@ class ActionResult:
 
 
 class ActionManager:
-    def __init__(self, mode: str, cgroup_manager: CgroupManager | None = None) -> None:
+    def __init__(
+        self,
+        mode: str,
+        cgroup_manager: CgroupManager | None = None,
+        terminate_grace_seconds: float = 2.0,
+    ) -> None:
         self.mode = mode
         self.cgroup_manager = cgroup_manager
+        self.terminate_grace_seconds = max(0.0, min(30.0, float(terminate_grace_seconds)))
 
     def execute(
         self,
@@ -41,7 +48,15 @@ class ActionManager:
                 return ActionResult(False, False, "PID was reused; action cancelled")
             if decision.action is Action.TERMINATE:
                 live.send_signal(signal.SIGTERM)
-                return ActionResult(True, True, "SIGTERM sent")
+                deadline = time.monotonic() + self.terminate_grace_seconds
+                while time.monotonic() < deadline:
+                    if not live.is_running():
+                        return ActionResult(True, True, "SIGTERM sent; process exited")
+                    time.sleep(0.05)
+                if live.is_running():
+                    live.send_signal(signal.SIGKILL)
+                    return ActionResult(True, True, "SIGTERM timed out; SIGKILL sent")
+                return ActionResult(True, True, "SIGTERM sent; process exited")
             if decision.action is Action.PAUSE:
                 live.send_signal(signal.SIGSTOP)
                 return ActionResult(True, True, "SIGSTOP sent")
@@ -49,7 +64,12 @@ class ActionManager:
                 return ActionResult(False, False, "No managed cgroup is configured")
             if memory is None:
                 return ActionResult(False, False, "No memory snapshot is available for cgroup limits")
-            result = self.cgroup_manager.apply(decision.action, process.pid, memory.total_bytes)
+            result = self.cgroup_manager.apply(
+                decision.action,
+                process.pid,
+                memory.total_bytes,
+                process.create_time,
+            )
             return ActionResult(True, result.success, result.message)
         except psutil.NoSuchProcess:
             return ActionResult(False, False, "Process exited before action")

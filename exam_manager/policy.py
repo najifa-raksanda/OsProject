@@ -10,6 +10,7 @@ from .models import Classification
 
 VALID_MODES = {"detect_only", "enforce"}
 VALID_PRIORITIES = {"low", "normal", "high", "critical"}
+VALID_POLICY_ACTIONS = {"log", "warn", "pause", "terminate"}
 
 
 def normalize_process_name(name: str) -> str:
@@ -32,6 +33,7 @@ class Policy:
     memory_cgroup: str | None
     cgroup_root: str | None
     resource_controls: dict[str, float]
+    terminate_grace_seconds: float
 
     @classmethod
     def load(cls, path: str | Path) -> "Policy":
@@ -70,6 +72,15 @@ class Policy:
             if not 1 <= value <= 100:
                 raise ValueError(f"Resource control percentage {key} must be between 1 and 100")
 
+        unknown_action = str(raw.get("unknown_action", "log")).casefold()
+        blocked_action = str(raw.get("blocked_action", "terminate")).casefold()
+        for field_name, action in (("unknown_action", unknown_action), ("blocked_action", blocked_action)):
+            if action not in VALID_POLICY_ACTIONS:
+                raise ValueError(f"{field_name} must be one of {sorted(VALID_POLICY_ACTIONS)}")
+        terminate_grace = float(raw.get("terminate_grace_seconds", 2.0))
+        if not 0 <= terminate_grace <= 30:
+            raise ValueError("terminate_grace_seconds must be between 0 and 30")
+
         return cls(
             exam_name=str(raw.get("exam_name", "Exam Session")),
             mode=mode,
@@ -77,13 +88,14 @@ class Policy:
             allowed=allowed,
             blocked=blocked,
             priorities=priorities,
-            unknown_action=str(raw.get("unknown_action", "log")).casefold(),
-            blocked_action=str(raw.get("blocked_action", "terminate")).casefold(),
+            unknown_action=unknown_action,
+            blocked_action=blocked_action,
             protected=frozenset(normalize_process_name(str(item)) for item in raw.get("protected", [])),
             pressure_thresholds={key: float(value) for key, value in raw.get("pressure_thresholds", {}).items()},
             memory_cgroup=str(raw["memory_cgroup"]) if raw.get("memory_cgroup") else None,
             cgroup_root=str(raw["cgroup_root"]) if raw.get("cgroup_root") else None,
             resource_controls=controls,
+            terminate_grace_seconds=terminate_grace,
         )
 
     def classify(self, process_name: str) -> Classification:
