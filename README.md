@@ -6,6 +6,13 @@ A lightweight Linux service that monitors processes during an exam, applies an a
 
 For a plain-language feature summary, see [FEATURES.md](FEATURES.md). For a teacher-facing walkthrough, see [DEMO_GUIDE.md](DEMO_GUIDE.md). For the combined code-level review and improvement status, see [IMPROVEMENTS.md](IMPROVEMENTS.md).
 
+Final evaluation material:
+
+- [FIXES.md](FIXES.md) - verified fixes, inherited improvements, evidence still required, and unimplemented future work
+- [RUBRIC_READINESS.md](RUBRIC_READINESS.md) - marking-criterion mapping and submission checklist
+- [PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md) - timed six-minute presentation and four-minute live demo
+- [REPORT_OUTLINE.md](REPORT_OUTLINE.md) - required technical report structure and results table
+
 Implemented:
 
 - Process discovery and resource snapshots with `psutil`
@@ -50,6 +57,12 @@ Start the dashboard:
 
 ```bash
 python run.py
+```
+
+For the safe named-workload evaluation policy:
+
+```bash
+EXAM_POLICY=config/demo_policy.json python run.py
 ```
 
 Open <http://127.0.0.1:5000>, then click **Start Exam**.

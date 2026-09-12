@@ -49,3 +49,17 @@ def test_summary_keeps_sessions_separate(tmp_path):
     logger.record_sample("second", memory, prediction, 1, 1, 1, 1)
     assert logger.summary("first")["sample_count"] == 1
     assert logger.summary("second")["sample_count"] == 1
+
+
+def test_session_samples_returns_all_samples_in_chronological_order(tmp_path):
+    logger = EventLogger(tmp_path / "events.db")
+    memory = MemorySnapshot(1, 100, 50, 50, 0, 0, 0)
+    prediction = PredictionResult(
+        PressureLevel.NORMAL, PressureLevel.NORMAL, 20, 1.0, "normal", ("normal",), 1
+    )
+    for index in range(3):
+        logger.record_sample("exam", memory, prediction, index, 0, 0, 1)
+
+    samples = logger.session_samples("exam")
+    assert len(samples) == 3
+    assert [sample["loop_duration_ms"] for sample in samples] == [0.0, 1.0, 2.0]

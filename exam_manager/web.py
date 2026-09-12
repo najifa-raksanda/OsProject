@@ -79,7 +79,7 @@ def create_app(
 
     @app.get("/export/samples.csv")
     def export_samples():
-        rows = list(reversed(service.logger.recent_samples(service.session_id, 2000)))
+        rows = service.logger.session_samples(service.session_id)
         return csv_response(rows, f"samples-{service.session_id}.csv")
 
     @app.get("/export/report.json")

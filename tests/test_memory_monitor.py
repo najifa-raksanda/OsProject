@@ -49,3 +49,29 @@ def test_missing_cgroup_falls_back_to_system(tmp_path):
     assert result.current_bytes == 600
     assert result.used_percent == 60
 
+
+def test_historical_oom_count_is_baselined(tmp_path):
+    write_cgroup(tmp_path, oom_kill=7)
+    monitor = MemoryMonitor(tmp_path, clock=lambda: 1.0)
+    first = monitor.sample()
+    assert first.oom_kill_delta == 0
+
+    write_cgroup(tmp_path, oom_kill=8)
+    second = monitor.sample()
+    assert second.oom_kill_delta == 1
+
+
+def test_source_change_resets_growth_history(tmp_path):
+    write_cgroup(tmp_path, current_mb=50)
+    clock_values = iter([1.0, 2.0, 3.0])
+    vm = lambda: SimpleNamespace(total=1000 * 1024 * 1024, available=500 * 1024 * 1024, percent=50)
+    monitor = MemoryMonitor(tmp_path, clock=lambda: next(clock_values), virtual_memory=vm)
+    monitor.sample()
+    write_cgroup(tmp_path, current_mb=70)
+    monitor.sample()
+    # Replace the cgroup reader with system metrics to simulate a source change.
+    monitor.cgroup = None
+    changed = monitor.sample()
+    assert changed.source == "system"
+    assert changed.growth_mb_s == 0
+

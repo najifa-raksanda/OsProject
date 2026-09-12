@@ -1,6 +1,6 @@
 # Phase 8 Evaluation Guide
 
-Use a VirtualBox snapshot and keep `mode` set to `detect_only` for the first four experiments. Run one fresh exam session per experiment and download all three exports before stopping the session.
+Use a VirtualBox snapshot and keep `mode` set to `detect_only` for the first four experiments. For a teacher demo, select `config/demo_policy.json` with `EXAM_POLICY=config/demo_policy.json`; it uses harmless named workloads and does not block the dashboard browser. Run one fresh exam session per experiment and download all three exports before stopping the session.
 
 ## Metrics and meanings
 
@@ -28,7 +28,7 @@ Expected: primarily Normal pressure, low overhead, and no intervention.
 ## Experiment 2: Unauthorized application
 
 1. Start a fresh Exam Mode session.
-2. Launch Firefox once.
+2. Launch the harmless named blocked workload from `DEMO_GUIDE.md` once.
 3. Wait five seconds, then close Firefox.
 4. Confirm `blocked`, `terminate`, and `Detect-only` appear in the event table.
 5. Record the detection latency and download the exports.

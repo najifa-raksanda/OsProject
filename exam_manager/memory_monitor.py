@@ -85,6 +85,7 @@ class MemoryMonitor:
         self._virtual_memory = virtual_memory
         self._history: deque[tuple[float, int]] = deque()
         self._last_events: dict[str, int] = {}
+        self._last_source: str | None = None
 
     def _growth_rate(self, timestamp: float, used_bytes: int) -> float:
         self._history.append((timestamp, used_bytes))
@@ -123,9 +124,18 @@ class MemoryMonitor:
             limit = None
             source = "system"
 
+        source_changed = self._last_source is not None and source != self._last_source
+        if source_changed:
+            self._history.clear()
+            self._last_events = {}
         growth = self._growth_rate(now, used)
-        oom_kill_delta = max(0, events.get("oom_kill", 0) - self._last_events.get("oom_kill", 0))
+        # The first observation is a baseline. Historical OOM kills must not be
+        # reported as events created by this session.
+        oom_kill_delta = 0 if not self._last_events else max(
+            0, events.get("oom_kill", 0) - self._last_events.get("oom_kill", 0)
+        )
         self._last_events = events
+        self._last_source = source
         return MemorySnapshot(
             timestamp=now,
             total_bytes=effective_total,

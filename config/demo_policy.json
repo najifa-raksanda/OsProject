@@ -1,0 +1,37 @@
+{
+  "exam_name": "Safe Evaluation Demonstration",
+  "mode": "detect_only",
+  "sample_interval_seconds": 1,
+  "memory_cgroup": null,
+  "cgroup_root": "/sys/fs/cgroup/exam-resource-manager",
+  "resource_controls": {
+    "restricted_memory_high_percent": 60,
+    "restricted_memory_max_percent": 90,
+    "protected_memory_low_percent": 20
+  },
+  "allowed": ["bash", "code", "gcc", "python3", "terminal", "exam-low", "exam-high"],
+  "blocked": ["exam-blocked"],
+  "priorities": {
+    "gcc": "high",
+    "python3": "normal",
+    "exam-low": "low",
+    "exam-high": "high"
+  },
+  "unknown_action": "log",
+  "blocked_action": "terminate",
+  "terminate_grace_seconds": 2,
+  "retention_days": 30,
+  "protected": ["exam-resource-manager", "systemd"],
+  "pressure_thresholds": {
+    "elevated_memory_percent": 70,
+    "high_memory_percent": 82,
+    "critical_memory_percent": 92,
+    "elevated_growth_mb_s": 20,
+    "high_growth_mb_s": 60,
+    "critical_growth_mb_s": 120,
+    "high_psi_avg10": 2,
+    "critical_psi_avg10": 10,
+    "escalation_samples": 2,
+    "recovery_samples": 3
+  }
+}

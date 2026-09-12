@@ -28,7 +28,7 @@ class ExamService:
         self._self_process.cpu_percent(None)
         self.monitor = ProcessMonitor()
         self.cgroup_manager = self._make_cgroup_manager()
-        self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
+        self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
         self.predictor = PressurePredictor(self.policy.pressure_thresholds)
         self.action_manager = ActionManager(
             self.policy.mode,
@@ -62,7 +62,9 @@ class ExamService:
                 self.cgroup_manager,
                 self.policy.terminate_grace_seconds,
             )
-            self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
+            # The enforcement root is not automatically the metric source.
+            # Whole-system monitoring remains selected when memory_cgroup is unset.
+            self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
             self.session_id = uuid.uuid4().hex[:12]
             self._latest_prediction = {}
             self._prediction_history = []
@@ -154,10 +156,12 @@ class ExamService:
                     action_key = (process.pid, process.create_time, decision.action.value)
                     if now - self._last_actions.get(action_key, float("-inf")) < 30:
                         continue
-                    result = self.action_manager.execute(process, decision, memory)
                     detection_latency_ms = (
                         max(0.0, (time.time() - process.create_time) * 1000) if is_new else None
                     )
+                    # Capture detection latency before enforcement. The action
+                    # duration is recorded separately in details_json.
+                    result = self.action_manager.execute(process, decision, memory)
                     self.logger.record(
                         self.session_id, process, memory, decision, result, detection_latency_ms
                     )

@@ -75,7 +75,7 @@
     <div class="card"><span class="label">Stable prediction</span><span id="prediction-level" class="value {{ status.prediction.get('level', 'normal') }}">{{ status.prediction.get('level', 'waiting') | upper }}</span></div>
     <div class="card"><span class="label">Raw observation</span><span class="value {{ status.prediction.get('raw_level', 'normal') }}">{{ status.prediction.get('raw_level', 'waiting') | upper }}</span></div>
     <div class="card"><span class="label">Risk score</span><span id="risk-score" class="value">{{ status.prediction.get('score', 0) }}/100</span></div>
-    <div class="card"><span class="label">Confidence</span><span id="prediction-confidence" class="value">{{ '%.0f' | format(status.prediction.get('confidence', 0) * 100) }}%</span></div>
+    <div class="card"><span class="label">Signal persistence</span><span id="prediction-confidence" class="value">{{ '%.0f' | format(status.prediction.get('confidence', 0) * 100) }}%</span></div>
   </section>
   <p class="subtitle">{{ status.prediction.get('reason', 'Start Exam Mode to generate a prediction.') }}</p>
 

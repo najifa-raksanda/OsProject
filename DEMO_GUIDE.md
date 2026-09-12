@@ -1,6 +1,6 @@
 # Live Demonstration Guide
 
-This guide explains how to show each project feature to a teacher using safe, temporary workloads. Keep `mode` set to `detect_only` for the demonstration.
+This guide explains how to show each project feature to a teacher using safe, temporary workloads. Keep `mode` set to `detect_only` for the demonstration. For the four-minute rubric demo, use `config/demo_policy.json`; it blocks only the harmless named workload `exam-blocked`, so the dashboard browser remains usable.
 
 ## Before the demonstration
 
@@ -9,10 +9,22 @@ Start the service:
 ```bash
 cd ~/OsProject
 source .venv/bin/activate
-python run.py
+EXAM_POLICY=config/demo_policy.json python run.py
 ```
 
 Open `http://127.0.0.1:5000` in Firefox and click **Start Exam**. Keep this terminal open. Run each test in a second terminal.
+
+## Prepare the safe named workloads
+
+Run once in a second terminal:
+
+```bash
+cp "$(command -v python3)" /tmp/exam-blocked
+cp "$(command -v python3)" /tmp/exam-low
+cp "$(command -v python3)" /tmp/exam-high
+```
+
+The copied interpreter keeps the test harmless while giving the process a policy-controlled executable name.
 
 ## Show an allowed Python process
 
@@ -50,12 +62,12 @@ Recommended action: allow
 
 Stop it with `Ctrl+C`. Under High or Critical memory pressure, the recommended action changes to `protect`.
 
-## Show a blocked Chrome process
+## Show a blocked named workload
 
-Start Chrome after Exam Mode is active:
+Start the harmless blocked workload after Exam Mode is active:
 
 ```bash
-google-chrome --user-data-dir=/tmp/exam-chrome-demo --no-first-run
+/tmp/exam-blocked tools/blocked_demo.py
 ```
 
 Select the **Blocked** process filter. The dashboard should display a red alert and an event similar to:
@@ -64,7 +76,7 @@ Select the **Blocked** process filter. The dashboard should display a red alert 
 chrome -> blocked -> terminate -> Detect-only
 ```
 
-Chrome remains open because detect-only mode records the decision without enforcing it.
+The workload remains open because detect-only mode records the decision without enforcing it. The default policy can still be used separately to demonstrate browser blocking, but it is not the safest four-minute classroom demo because the browser is also the dashboard client.
 
 ## Show an unknown process
 
@@ -142,4 +154,3 @@ Start Exam
 -> cgroup readiness
 -> download evaluation report
 ```
-

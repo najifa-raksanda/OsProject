@@ -91,7 +91,11 @@ class EventLogger:
         result: ActionResult,
         detection_latency_ms: float | None = None,
     ) -> int:
-        details = {"process": process.to_dict(), "memory": memory.to_dict()}
+        details = {
+            "process": process.to_dict(),
+            "memory": memory.to_dict(),
+            "action_duration_ms": round(result.duration_ms, 3),
+        }
         event_time = datetime.now(UTC)
         values = (
             event_time.isoformat(), session_id, process.pid, process.name, process.cpu_percent,
@@ -188,6 +192,18 @@ class EventLogger:
                 rows = connection.execute(
                     "SELECT * FROM samples WHERE session_id = ? ORDER BY id DESC LIMIT ?",
                     (session_id, safe_limit),
+                ).fetchall()
+            finally:
+                connection.close()
+        return [dict(row) for row in rows]
+
+    def session_samples(self, session_id: str) -> list[dict[str, Any]]:
+        """Return every retained sample for one session in chronological order."""
+        with self._lock:
+            connection = self._connect()
+            try:
+                rows = connection.execute(
+                    "SELECT * FROM samples WHERE session_id = ? ORDER BY id", (session_id,)
                 ).fetchall()
             finally:
                 connection.close()
