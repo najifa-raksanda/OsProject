@@ -17,6 +17,10 @@ This file records the code-level and systems-level improvements applied on the `
 6. `FEATURES.md` documents the product features, workflow, and safety defaults.
 7. The README now links to the feature and improvement documents and explains the new configurable action behavior.
 8. The dashboard has a refreshed visual system with clearer status hierarchy, responsive layout, stronger table readability, and improved action and evaluation presentation.
+9. The event store now uses SQLite WAL mode, useful indexes, and configurable age-based retention through `retention_days`.
+10. A production WSGI entrypoint, Gunicorn dependency, and systemd service template are included for supervised Linux deployment.
+11. The dashboard now refreshes process, event, and prediction tables through JSON APIs without a full-page reload.
+12. GitHub Actions now runs dependency installation, compilation, and the test suite on pushes and pull requests.
 
 ## Remaining hardening work
 
@@ -26,12 +30,12 @@ These items require additional product decisions, a real Linux test environment,
 - Verify applications by executable path, ownership, hash, or signature instead of process name alone.
 - Add policy checksums, read-only policy locking, and a watchdog for monitor tampering or unexpected service termination.
 - Split privileged cgroup operations into a minimal helper over a protected Unix socket.
-- Run the dashboard and monitor as separate supervised services using systemd and a production WSGI server.
-- Add session lifecycle states, database WAL mode, retention, archival, and backup policies.
+- Run the dashboard and monitor as separate supervised services using systemd and a production WSGI server. The current service template supervises the combined application; a split-process deployment remains future work.
+- Add session lifecycle states, archival, and backup policies. WAL mode and retention are now implemented.
 - Calibrate thresholds per machine and include swap, CPU, and I/O pressure in prediction.
 - Add service-level, end-to-end, failure-mode, Linux integration, and performance tests.
-- Add GitHub Actions for tests, linting, type checking, and security checks.
-- Extend the current status-card API polling to process, event, and prediction tables; Server-Sent Events or WebSockets can remove polling later.
+- Extend CI with linting, type checking, dependency auditing, and coverage thresholds.
+- Replace the current table polling with Server-Sent Events or WebSockets if lower-latency updates are required.
 - Add student warnings, teacher-approved exceptions, accessible status indicators, and clearer operator guidance.
 
 ## Validation notes

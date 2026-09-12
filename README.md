@@ -54,6 +54,8 @@ python run.py
 
 Open <http://127.0.0.1:5000>, then click **Start Exam**.
 
+For a supervised Linux deployment, install the dependencies and copy `deploy/exam-resource-manager.service` to `/etc/systemd/system/`. Update `WorkingDirectory`, `ExecStart`, and `ReadWritePaths` for the target machine, then run `sudo systemctl daemon-reload` and `sudo systemctl enable --now exam-resource-manager`. The service binds to localhost by default and uses the production `wsgi.py` entrypoint.
+
 ## Safe first demonstration
 
 The default configuration is `detect_only`; no process will be killed. To demonstrate a blocked program without using a real browser, add `python3` to the blocked list only after removing it from the allowed list, then start a separate harmless process. For a cleaner named executable, copy the interpreter and use that copy:
@@ -70,6 +72,8 @@ Only after the detect-only demonstration succeeds, change `"mode": "enforce"`, r
 ## Configuration
 
 Edit `config/policy.json`. Changes are loaded whenever Exam Mode starts. Application names are case-insensitive and `.exe` is removed during matching. `unknown_action` and `blocked_action` accept `log`, `warn`, `pause`, or `terminate`. `terminate_grace_seconds` controls how long the service waits after SIGTERM before escalating to SIGKILL.
+
+`retention_days` controls age-based cleanup of event and sample records. SQLite uses WAL mode and indexes for safer concurrent dashboard reads during monitoring.
 
 `memory_cgroup` controls the Phase 5 metric source:
 

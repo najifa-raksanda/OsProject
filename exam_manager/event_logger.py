@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -54,18 +54,26 @@ CREATE TABLE IF NOT EXISTS samples (
 
 
 class EventLogger:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, retention_days: int = 30) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.retention_days = max(1, int(retention_days))
         self._lock = threading.Lock()
         connection = self._connect()
         try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=NORMAL")
+            connection.execute("PRAGMA foreign_keys=ON")
             connection.execute(SCHEMA)
             connection.execute(SAMPLES_SCHEMA)
             columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
             if "detection_latency_ms" not in columns:
                 connection.execute("ALTER TABLE events ADD COLUMN detection_latency_ms REAL")
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id)")
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)")
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_samples_session_id ON samples(session_id)")
             connection.commit()
+            self._purge_connection(connection)
         finally:
             connection.close()
 
@@ -157,6 +165,20 @@ class EventLogger:
             finally:
                 connection.close()
         return [dict(row) for row in rows]
+
+    def _purge_connection(self, connection: sqlite3.Connection) -> None:
+        cutoff = (datetime.now(UTC) - timedelta(days=self.retention_days)).isoformat()
+        connection.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
+        connection.execute("DELETE FROM samples WHERE timestamp < ?", (cutoff,))
+        connection.commit()
+
+    def purge_old(self) -> None:
+        with self._lock:
+            connection = self._connect()
+            try:
+                self._purge_connection(connection)
+            finally:
+                connection.close()
 
     def recent_samples(self, session_id: str, limit: int = 120) -> list[dict[str, Any]]:
         safe_limit = min(max(int(limit), 1), 2000)

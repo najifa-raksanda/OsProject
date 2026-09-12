@@ -1,0 +1,21 @@
+[Unit]
+Description=Predictive Exam Aware Resource Manager
+After=network.target
+
+[Service]
+Type=simple
+User=exam-manager
+Group=exam-manager
+WorkingDirectory=/opt/exam-manager
+EnvironmentFile=-/etc/exam-manager/environment
+ExecStart=/opt/exam-manager/.venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 --access-logfile - --error-logfile - wsgi:app
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/exam-manager/data /sys/fs/cgroup/exam-resource-manager
+
+[Install]
+WantedBy=multi-user.target

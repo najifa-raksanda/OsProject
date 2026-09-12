@@ -69,7 +69,7 @@
 
   <table style="margin-top:16px">
     <thead><tr><th>Sample</th><th>Stable</th><th>Raw</th><th>Score</th><th>Explanation</th></tr></thead>
-    <tbody>
+    <tbody id="prediction-rows">
       {% for prediction in predictions %}
       <tr><td>{{ prediction.timestamp | int }}</td><td class="{{ prediction.level }}">{{ prediction.level }}</td><td class="{{ prediction.raw_level }}">{{ prediction.raw_level }}</td><td>{{ prediction.score }}/100</td><td>{{ prediction.reason }}</td></tr>
       {% else %}<tr><td colspan="5" class="empty">No prediction samples yet.</td></tr>{% endfor %}
@@ -107,7 +107,7 @@
   <h2>Recent policy events</h2>
   <table>
     <thead><tr><th>Time</th><th>Process</th><th>Classification</th><th>Decision</th><th>Result</th></tr></thead>
-    <tbody>
+    <tbody id="event-rows">
       {% for event in events %}
       <tr><td>{{ event.timestamp[11:19] }}</td><td>{{ event.process_name }} ({{ event.pid }})</td><td class="{{ event.classification }}">{{ event.classification }}</td><td class="{{ event.decision }}">{{ event.decision }}</td><td>{{ event.result_message }}</td></tr>
       {% else %}<tr><td colspan="5" class="empty">No events yet. Start Exam Mode and launch a test application.</td></tr>{% endfor %}
@@ -117,7 +117,7 @@
   <h2>Running processes</h2>
   <table>
     <thead><tr><th>PID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Status</th></tr></thead>
-    <tbody>
+    <tbody id="process-rows">
       {% for process in processes[:40] %}
       <tr><td>{{ process.pid }}</td><td>{{ process.name }}</td><td>{{ '%.1f' | format(process.cpu_percent) }}%</td><td>{{ '%.1f' | format(process.memory_bytes / 1048576) }} MB</td><td>{{ process.status }}</td></tr>
       {% else %}<tr><td colspan="5" class="empty">Start Exam Mode to collect a process snapshot.</td></tr>{% endfor %}
@@ -145,6 +145,60 @@
     ctx.fillStyle = '#60a5fa'; ctx.fillText('Memory %', 48, 18);
     ctx.fillStyle = '#f97316'; ctx.fillText('Risk score', 130, 18);
 
+    function replaceRows(id, rows, columns, emptyText, classColumns = {}) {
+      const body = document.getElementById(id);
+      if (!body) return;
+      body.replaceChildren();
+      if (!rows.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = columns.length;
+        cell.className = 'empty';
+        cell.textContent = emptyText;
+        row.appendChild(cell);
+        body.appendChild(row);
+        return;
+      }
+      rows.forEach(values => {
+        const row = document.createElement('tr');
+        values.forEach((value, index) => {
+          const cell = document.createElement('td');
+          cell.textContent = value == null ? '' : String(value);
+          if (classColumns[index]) cell.className = classColumns[index](value);
+          row.appendChild(cell);
+        });
+        body.appendChild(row);
+      });
+    }
+
+    function formatMb(bytes) { return (Number(bytes || 0) / 1048576).toFixed(1) + ' MB'; }
+
+    async function refreshTables() {
+      try {
+        const [processResponse, eventResponse, predictionResponse] = await Promise.all([
+          fetch('{{ url_for("api_processes") }}'),
+          fetch('{{ url_for("api_events") }}'),
+          fetch('{{ url_for("api_predictions") }}')
+        ]);
+        const processes = await processResponse.json();
+        const events = await eventResponse.json();
+        const predictions = await predictionResponse.json();
+        replaceRows('prediction-rows', predictions.slice(0, 12).map(item => [
+          new Date(Number(item.timestamp || 0) * 1000).toLocaleTimeString(), item.level, item.raw_level,
+          `${item.score}/100`, item.reason
+        ]), [1, 2, 3, 4, 5], 'No prediction samples yet.', { 1: value => value, 2: value => value });
+        replaceRows('event-rows', events.slice(0, 30).map(item => [
+          String(item.timestamp || '').slice(11, 19), `${item.process_name} (${item.pid})`,
+          item.classification, item.decision, item.result_message
+        ]), [1, 2, 3, 4, 5], 'No events yet.', { 2: value => value, 3: value => value });
+        replaceRows('process-rows', processes.slice(0, 40).map(item => [
+          item.pid, item.name, `${Number(item.cpu_percent || 0).toFixed(1)}%`, formatMb(item.memory_bytes), item.status
+        ]), [1, 2, 3, 4, 5], 'Start Exam Mode to collect a process snapshot.');
+      } catch (error) {
+        // The server-rendered page remains usable if a live refresh fails.
+      }
+    }
+
     async function refreshLiveStatus() {
       try {
         const response = await fetch('{{ url_for("api_status") }}', { headers: { 'Accept': 'application/json' } });
@@ -164,6 +218,7 @@
         set('risk-score', `${prediction.score || 0}/100`);
         set('prediction-confidence', `${Math.round(Number(prediction.confidence || 0) * 100)}%`);
         set('live-status', 'LIVE · updated just now');
+        refreshTables();
       } catch (error) {
         set('live-status', 'LIVE · waiting for service');
       }

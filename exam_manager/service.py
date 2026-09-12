@@ -23,7 +23,7 @@ class ExamService:
     def __init__(self, policy_path: str | Path, database_path: str | Path) -> None:
         self.policy_path = Path(policy_path)
         self.policy = Policy.load(self.policy_path)
-        self.logger = EventLogger(database_path)
+        self.logger = EventLogger(database_path, retention_days=self.policy.retention_days)
         self._self_process = psutil.Process()
         self._self_process.cpu_percent(None)
         self.monitor = ProcessMonitor()
@@ -53,6 +53,8 @@ class ExamService:
             if self._active:
                 return False
             self.policy = Policy.load(self.policy_path)
+            self.logger.retention_days = self.policy.retention_days
+            self.logger.purge_old()
             self.predictor = PressurePredictor(self.policy.pressure_thresholds)
             self.cgroup_manager = self._make_cgroup_manager()
             self.action_manager = ActionManager(

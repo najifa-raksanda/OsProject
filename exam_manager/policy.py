@@ -34,6 +34,7 @@ class Policy:
     cgroup_root: str | None
     resource_controls: dict[str, float]
     terminate_grace_seconds: float
+    retention_days: int
 
     @classmethod
     def load(cls, path: str | Path) -> "Policy":
@@ -80,6 +81,9 @@ class Policy:
         terminate_grace = float(raw.get("terminate_grace_seconds", 2.0))
         if not 0 <= terminate_grace <= 30:
             raise ValueError("terminate_grace_seconds must be between 0 and 30")
+        retention_days = int(raw.get("retention_days", 30))
+        if not 1 <= retention_days <= 3650:
+            raise ValueError("retention_days must be between 1 and 3650")
 
         return cls(
             exam_name=str(raw.get("exam_name", "Exam Session")),
@@ -96,6 +100,7 @@ class Policy:
             cgroup_root=str(raw["cgroup_root"]) if raw.get("cgroup_root") else None,
             resource_controls=controls,
             terminate_grace_seconds=terminate_grace,
+            retention_days=retention_days,
         )
 
     def classify(self, process_name: str) -> Classification:
