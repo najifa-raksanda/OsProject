@@ -96,6 +96,16 @@
   </div>
   <canvas id="evaluationChart" width="1100" height="240" aria-label="Memory utilization and prediction risk history"></canvas>
 
+  <h2>CPU scheduling &amp; virtual memory</h2>
+  <section class="cards">
+    <div class="card"><span class="label">CPU pressure (some avg10)</span><span class="value">{{ '%.2f' | format(status.cpu_io.get('cpu_psi_some_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">CPU pressure (some avg60)</span><span class="value">{{ '%.2f' | format(status.cpu_io.get('cpu_psi_avg60', 0)) }}%</span></div>
+    <div class="card"><span class="label">I/O pressure (some avg10)</span><span class="value">{{ '%.2f' | format(status.cpu_io.get('io_psi_some_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">I/O pressure (full avg10)</span><span class="value">{{ '%.2f' | format(status.cpu_io.get('io_psi_full_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">CPU cgroup controller</span><span class="value {{ 'active' if status.cgroup.get('cpu_controller') else 'inactive' }}">{{ 'AVAILABLE' if status.cgroup.get('cpu_controller') else 'UNAVAILABLE' }}</span></div>
+  </section>
+  <p class="subtitle">Sourced directly from <code>/proc/pressure/cpu</code> and <code>/proc/pressure/io</code>, alongside the existing memory PSI reading above. Enforced THROTTLE/PROTECT actions also set <code>cpu.weight</code>/<code>cpu.max</code> on the managed cgroup when the cpu controller is available.</p>
+
   {% if status.error %}<p class="critical"><strong>Monitor error:</strong> {{ status.error }}</p>{% endif %}
 
   <h2>Recent policy events</h2>

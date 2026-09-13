@@ -50,7 +50,18 @@ class ActionManager:
             if memory is None:
                 return ActionResult(False, False, "No memory snapshot is available for cgroup limits")
             result = self.cgroup_manager.apply(decision.action, process.pid, memory.total_bytes)
-            return ActionResult(True, result.success, result.message)
+            # Best-effort: also place the process under a CPU scheduling
+            # control (cpu.weight / cpu.max) alongside the memory limit.
+            # A host without the cpu controller (or any failure here) does
+            # not change the overall success/attempted outcome, which
+            # stays governed by the memory-cgroup result above.
+            cpu_result = self.cgroup_manager.apply_cpu(decision.action, process.pid)
+            message = (
+                f"{result.message}; {cpu_result.message}"
+                if cpu_result.success
+                else f"{result.message}; CPU scheduling control skipped: {cpu_result.message}"
+            )
+            return ActionResult(True, result.success, message)
         except psutil.NoSuchProcess:
             return ActionResult(False, False, "Process exited before action")
         except (psutil.AccessDenied, PermissionError) as exc:
