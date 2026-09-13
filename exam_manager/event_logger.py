@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from .action_manager import ActionResult
+from .cpu_io_monitor import CpuIoSnapshot
 from .models import Decision, MemorySnapshot, PredictionResult, ProcessSnapshot
+from .proc_reader import ProcessDetail
 
 
 SCHEMA = """
@@ -52,6 +54,26 @@ CREATE TABLE IF NOT EXISTS samples (
 )
 """
 
+# Columns added after the original schema. Kept as ALTER TABLE migrations
+# (like the pre-existing detection_latency_ms migration) so databases
+# created by earlier versions of this project keep working unmodified.
+EVENT_MIGRATION_COLUMNS = {
+    "detection_latency_ms": "REAL",
+    "vm_rss_kb": "INTEGER",
+    "vm_swap_kb": "INTEGER",
+    "voluntary_ctxt_switches": "INTEGER",
+    "nonvoluntary_ctxt_switches": "INTEGER",
+    "minor_faults": "INTEGER",
+    "major_faults": "INTEGER",
+}
+
+SAMPLE_MIGRATION_COLUMNS = {
+    "cpu_psi_some_avg10": "REAL",
+    "cpu_psi_avg60": "REAL",
+    "io_psi_some_avg10": "REAL",
+    "io_psi_full_avg10": "REAL",
+}
+
 
 class EventLogger:
     def __init__(self, path: str | Path) -> None:
@@ -62,9 +84,14 @@ class EventLogger:
         try:
             connection.execute(SCHEMA)
             connection.execute(SAMPLES_SCHEMA)
-            columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
-            if "detection_latency_ms" not in columns:
-                connection.execute("ALTER TABLE events ADD COLUMN detection_latency_ms REAL")
+            event_columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
+            for column, column_type in EVENT_MIGRATION_COLUMNS.items():
+                if column not in event_columns:
+                    connection.execute(f"ALTER TABLE events ADD COLUMN {column} {column_type}")
+            sample_columns = {row[1] for row in connection.execute("PRAGMA table_info(samples)")}
+            for column, column_type in SAMPLE_MIGRATION_COLUMNS.items():
+                if column not in sample_columns:
+                    connection.execute(f"ALTER TABLE samples ADD COLUMN {column} {column_type}")
             connection.commit()
         finally:
             connection.close()
@@ -82,8 +109,11 @@ class EventLogger:
         decision: Decision,
         result: ActionResult,
         detection_latency_ms: float | None = None,
+        detail: ProcessDetail | None = None,
     ) -> int:
         details = {"process": process.to_dict(), "memory": memory.to_dict()}
+        if detail is not None:
+            details["proc_detail"] = detail.to_dict()
         event_time = datetime.now(UTC)
         values = (
             event_time.isoformat(), session_id, process.pid, process.name, process.cpu_percent,
@@ -91,6 +121,12 @@ class EventLogger:
             decision.action.value, decision.reason, int(result.attempted), int(result.success), result.message,
             round(detection_latency_ms, 3) if detection_latency_ms is not None else None,
             json.dumps(details, sort_keys=True),
+            detail.vm_rss_kb if detail else None,
+            detail.vm_swap_kb if detail else None,
+            detail.voluntary_ctxt_switches if detail else None,
+            detail.nonvoluntary_ctxt_switches if detail else None,
+            detail.minor_faults if detail else None,
+            detail.major_faults if detail else None,
         )
         with self._lock:
             connection = self._connect()
@@ -99,8 +135,10 @@ class EventLogger:
                     """INSERT INTO events (
                         timestamp, session_id, pid, process_name, cpu_percent, memory_bytes,
                         pressure_level, classification, priority, decision, reason, attempted,
-                        success, result_message, detection_latency_ms, details_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        success, result_message, detection_latency_ms, details_json,
+                        vm_rss_kb, vm_swap_kb, voluntary_ctxt_switches, nonvoluntary_ctxt_switches,
+                        minor_faults, major_faults
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -117,12 +155,17 @@ class EventLogger:
         monitor_cpu_percent: float,
         monitor_memory_bytes: int,
         process_count: int,
+        cpu_io: CpuIoSnapshot | None = None,
     ) -> int:
         values = (
             datetime.now(UTC).isoformat(), session_id, memory.used_percent, memory.growth_mb_s,
             memory.psi_some_avg10, memory.psi_full_avg10, prediction.level.value,
             prediction.raw_level.value, prediction.score, round(loop_duration_ms, 3),
             round(monitor_cpu_percent, 3), monitor_memory_bytes, process_count,
+            cpu_io.cpu_psi_some_avg10 if cpu_io else None,
+            cpu_io.cpu_psi_avg60 if cpu_io else None,
+            cpu_io.io_psi_some_avg10 if cpu_io else None,
+            cpu_io.io_psi_full_avg10 if cpu_io else None,
         )
         with self._lock:
             connection = self._connect()
@@ -131,8 +174,9 @@ class EventLogger:
                     """INSERT INTO samples (
                         timestamp, session_id, memory_used_percent, growth_mb_s, psi_some_avg10,
                         psi_full_avg10, stable_level, raw_level, risk_score, loop_duration_ms,
-                        monitor_cpu_percent, monitor_memory_bytes, process_count
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        monitor_cpu_percent, monitor_memory_bytes, process_count,
+                        cpu_psi_some_avg10, cpu_psi_avg60, io_psi_some_avg10, io_psi_full_avg10
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -195,7 +239,9 @@ class EventLogger:
                               COALESCE(AVG(loop_duration_ms), 0) AS avg_loop_ms,
                               COALESCE(MAX(loop_duration_ms), 0) AS max_loop_ms,
                               COALESCE(AVG(monitor_cpu_percent), 0) AS avg_monitor_cpu,
-                              COALESCE(MAX(monitor_memory_bytes), 0) AS peak_monitor_memory_bytes
+                              COALESCE(MAX(monitor_memory_bytes), 0) AS peak_monitor_memory_bytes,
+                              COALESCE(MAX(cpu_psi_some_avg10), 0) AS peak_cpu_psi_some,
+                              COALESCE(MAX(io_psi_some_avg10), 0) AS peak_io_psi_some
                        FROM samples WHERE session_id = ?""",
                     (session_id,),
                 ).fetchone()

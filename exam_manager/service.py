@@ -10,12 +10,14 @@ import psutil
 
 from .action_manager import ActionManager
 from .cgroup_manager import CgroupManager
+from .cpu_io_monitor import CpuIoMonitor
 from .decision_engine import decide
 from .event_logger import EventLogger
 from .memory_monitor import MemoryMonitor
 from .models import Action, Classification, PressureLevel
 from .policy import Policy
 from .predictor import PressurePredictor
+from .proc_reader import read_process_detail
 from .process_monitor import ProcessMonitor
 
 
@@ -29,6 +31,7 @@ class ExamService:
         self.monitor = ProcessMonitor()
         self.cgroup_manager = self._make_cgroup_manager()
         self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
+        self.cpu_io_monitor = CpuIoMonitor()
         self.predictor = PressurePredictor(self.policy.pressure_thresholds)
         self.action_manager = ActionManager(self.policy.mode, self.cgroup_manager)
         self.session_id = uuid.uuid4().hex[:12]
@@ -37,6 +40,7 @@ class ExamService:
         self._lock = threading.RLock()
         self._latest_processes: list[dict[str, Any]] = []
         self._latest_memory: dict[str, Any] = {}
+        self._latest_cpu_io: dict[str, Any] = {}
         self._pressure = PressureLevel.NORMAL
         self._latest_prediction: dict[str, Any] = {}
         self._prediction_history: list[dict[str, Any]] = []
@@ -53,6 +57,7 @@ class ExamService:
             self.cgroup_manager = self._make_cgroup_manager()
             self.action_manager = ActionManager(self.policy.mode, self.cgroup_manager)
             self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup or self.policy.cgroup_root)
+            self.cpu_io_monitor = CpuIoMonitor()
             self.session_id = uuid.uuid4().hex[:12]
             self._latest_prediction = {}
             self._prediction_history = []
@@ -81,6 +86,7 @@ class ExamService:
                 new_processes = observed_new if self._baseline_ready else []
                 self._baseline_ready = True
                 memory = self.memory_monitor.sample()
+                cpu_io = self.cpu_io_monitor.sample()
                 prediction = self.predictor.predict(memory)
                 pressure = prediction.level
                 prediction_data = {"timestamp": memory.timestamp, **prediction.to_dict()}
@@ -88,6 +94,7 @@ class ExamService:
                 with self._lock:
                     self._latest_processes = [item.to_dict() for item in processes]
                     self._latest_memory = memory.to_dict()
+                    self._latest_cpu_io = cpu_io.to_dict()
                     self._pressure = pressure
                     self._latest_prediction = prediction_data
                     self._prediction_history.append(prediction_data)
@@ -122,8 +129,12 @@ class ExamService:
                     detection_latency_ms = (
                         max(0.0, (time.time() - process.create_time) * 1000) if is_new else None
                     )
+                    # Read /proc directly (VmRSS/VmSwap, ctx switches, page
+                    # faults) only for the process we are actually logging
+                    # an event for, to keep this off the hot per-loop path.
+                    detail = read_process_detail(process.pid)
                     self.logger.record(
-                        self.session_id, process, memory, decision, result, detection_latency_ms
+                        self.session_id, process, memory, decision, result, detection_latency_ms, detail
                     )
                     self._last_actions[action_key] = now
 
@@ -142,6 +153,7 @@ class ExamService:
                     monitor_cpu,
                     monitor_memory,
                     len(processes),
+                    cpu_io,
                 )
             except Exception as exc:  # keep the monitor alive and expose the failure to the dashboard
                 with self._lock:
@@ -160,6 +172,7 @@ class ExamService:
                 "prediction": dict(self._latest_prediction),
                 "cgroup": self.cgroup_manager.status() if self.cgroup_manager else {"configured": False},
                 "memory": dict(self._latest_memory),
+                "cpu_io": dict(self._latest_cpu_io),
                 "process_count": len(self._latest_processes),
                 "evaluation": self.logger.summary(self.session_id),
                 "error": self._error,
