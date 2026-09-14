@@ -11,6 +11,9 @@ Predictive Exam-Aware Resource Manager is a Linux service for controlled compute
 - **Process discovery:** Collect process name, PID, executable, creation time, CPU usage, memory usage, and status through `psutil`.
 - **Blocked-application detection:** Detect blocked applications launched during an exam and detect blocked or unknown applications already present when the session starts.
 - **Memory monitoring:** Read system or cgroup memory usage, rolling memory growth, memory events, and Linux PSI memory pressure.
+- **CPU scheduling control:** Use cgroup v2 `cpu.weight` and `cpu.max` for best-effort throttle/protect enforcement when the host exposes the CPU controller.
+- **Virtual-memory/process detail:** Read `/proc/[pid]/status` and `/proc/[pid]/stat` for RSS, swap, page faults, and voluntary/involuntary context switches at event time.
+- **CPU/I/O pressure:** Sample `/proc/pressure/cpu` and `/proc/pressure/io`, persist the readings, and expose them on the live dashboard.
 - **Explainable prediction:** Classify pressure as Normal, Elevated, High, or Critical with hysteresis, risk score, signals, and a human-readable explanation.
 - **Priority-aware decisions:** Protect critical and high-priority exam workloads and select lower-priority workloads for resource intervention.
 - **Safe operating modes:** `detect_only` records the action that would be taken; `enforce` permits configured process and cgroup actions.
@@ -42,4 +45,3 @@ Load policy
 - Critical workloads are protected from destructive actions.
 - cgroup roots must resolve below the cgroup v2 hierarchy root.
 - Enforcement should only be tested with harmless processes in a disposable Linux VM.
-

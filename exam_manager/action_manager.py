@@ -80,7 +80,13 @@ class ActionManager:
                 memory.total_bytes,
                 process.create_time,
             )
-            return ActionResult(True, result.success, result.message, (time.monotonic() - started) * 1000)
+            cpu_result = self.cgroup_manager.apply_cpu(decision.action, process.pid, process.create_time)
+            message = result.message
+            if cpu_result.success:
+                message += f"; {cpu_result.message}"
+            elif "unavailable" not in cpu_result.message:
+                message += f"; CPU control skipped: {cpu_result.message}"
+            return ActionResult(True, result.success, message, (time.monotonic() - started) * 1000)
         except psutil.NoSuchProcess:
             return result(False, False, "Process exited before action")
         except (psutil.AccessDenied, PermissionError) as exc:

@@ -69,6 +69,13 @@ class EventLogger:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
             if "detection_latency_ms" not in columns:
                 connection.execute("ALTER TABLE events ADD COLUMN detection_latency_ms REAL")
+            for column in ("vm_rss_kb", "vm_swap_kb", "voluntary_ctxt_switches", "nonvoluntary_ctxt_switches", "minor_faults", "major_faults"):
+                if column not in columns:
+                    connection.execute(f"ALTER TABLE events ADD COLUMN {column} INTEGER")
+            sample_columns = {row[1] for row in connection.execute("PRAGMA table_info(samples)")}
+            for column in ("cpu_psi_some_avg10", "cpu_psi_some_avg60", "io_psi_some_avg10", "io_psi_full_avg10"):
+                if column not in sample_columns:
+                    connection.execute(f"ALTER TABLE samples ADD COLUMN {column} REAL")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_samples_session_id ON samples(session_id)")
@@ -90,12 +97,15 @@ class EventLogger:
         decision: Decision,
         result: ActionResult,
         detection_latency_ms: float | None = None,
+        process_detail: dict[str, int] | None = None,
     ) -> int:
         details = {
             "process": process.to_dict(),
             "memory": memory.to_dict(),
             "action_duration_ms": round(result.duration_ms, 3),
         }
+        if process_detail:
+            details["process_detail"] = process_detail
         event_time = datetime.now(UTC)
         values = (
             event_time.isoformat(), session_id, process.pid, process.name, process.cpu_percent,
@@ -103,6 +113,7 @@ class EventLogger:
             decision.action.value, decision.reason, int(result.attempted), int(result.success), result.message,
             round(detection_latency_ms, 3) if detection_latency_ms is not None else None,
             json.dumps(details, sort_keys=True),
+            *([process_detail.get(k) for k in ("vm_rss_kb", "vm_swap_kb", "voluntary_ctxt_switches", "nonvoluntary_ctxt_switches", "minor_faults", "major_faults")] if process_detail else [None] * 6),
         )
         with self._lock:
             connection = self._connect()
@@ -111,8 +122,9 @@ class EventLogger:
                     """INSERT INTO events (
                         timestamp, session_id, pid, process_name, cpu_percent, memory_bytes,
                         pressure_level, classification, priority, decision, reason, attempted,
-                        success, result_message, detection_latency_ms, details_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        success, result_message, detection_latency_ms, details_json,
+                        vm_rss_kb, vm_swap_kb, voluntary_ctxt_switches, nonvoluntary_ctxt_switches, minor_faults, major_faults
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -129,12 +141,14 @@ class EventLogger:
         monitor_cpu_percent: float,
         monitor_memory_bytes: int,
         process_count: int,
+        cpu_io: dict[str, float] | None = None,
     ) -> int:
         values = (
             datetime.now(UTC).isoformat(), session_id, memory.used_percent, memory.growth_mb_s,
             memory.psi_some_avg10, memory.psi_full_avg10, prediction.level.value,
             prediction.raw_level.value, prediction.score, round(loop_duration_ms, 3),
             round(monitor_cpu_percent, 3), monitor_memory_bytes, process_count,
+            *([cpu_io.get(k) for k in ("cpu_psi_some_avg10", "cpu_psi_some_avg60", "io_psi_some_avg10", "io_psi_full_avg10")] if cpu_io else [None] * 4),
         )
         with self._lock:
             connection = self._connect()
@@ -143,8 +157,9 @@ class EventLogger:
                     """INSERT INTO samples (
                         timestamp, session_id, memory_used_percent, growth_mb_s, psi_some_avg10,
                         psi_full_avg10, stable_level, raw_level, risk_score, loop_duration_ms,
-                        monitor_cpu_percent, monitor_memory_bytes, process_count
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        monitor_cpu_percent, monitor_memory_bytes, process_count,
+                        cpu_psi_some_avg10, cpu_psi_some_avg60, io_psi_some_avg10, io_psi_full_avg10
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -229,6 +244,8 @@ class EventLogger:
                               COALESCE(MAX(memory_used_percent), 0) AS peak_memory_percent,
                               COALESCE(MAX(growth_mb_s), 0) AS peak_growth_mb_s,
                               COALESCE(MAX(psi_some_avg10), 0) AS peak_psi_some,
+                              COALESCE(MAX(cpu_psi_some_avg10), 0) AS peak_cpu_psi_some,
+                              COALESCE(MAX(io_psi_some_avg10), 0) AS peak_io_psi_some,
                               COALESCE(MAX(risk_score), 0) AS peak_risk_score,
                               COALESCE(AVG(loop_duration_ms), 0) AS avg_loop_ms,
                               COALESCE(MAX(loop_duration_ms), 0) AS max_loop_ms,

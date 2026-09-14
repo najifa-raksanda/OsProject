@@ -28,6 +28,10 @@ class CgroupManager:
             "restricted_memory_high_percent": 60.0,
             "restricted_memory_max_percent": 90.0,
             "protected_memory_low_percent": 20.0,
+            "restricted_cpu_weight": 100,
+            "protected_cpu_weight": 1000,
+            "restricted_cpu_quota_percent": 50,
+            "cpu_period_us": 100000,
         } | (controls or {})
         try:
             inside = os.path.commonpath((str(self.hierarchy_root), str(self.root))) == str(self.hierarchy_root)
@@ -48,6 +52,7 @@ class CgroupManager:
             "root": str(self.root),
             "cgroup_v2": controllers_path.exists(),
             "memory_controller": "memory" in controllers,
+            "cpu_controller": "cpu" in controllers,
             "prepared": (self.root / "restricted").is_dir() and (self.root / "protected").is_dir(),
         }
 
@@ -97,6 +102,42 @@ class CgroupManager:
             enabled = []
         if "memory" not in enabled:
             self._write(control, "+memory")
+
+    def _enable_cpu(self, parent: Path) -> None:
+        control = parent / "cgroup.subtree_control"
+        try:
+            enabled = control.read_text(encoding="utf-8").split()
+        except (FileNotFoundError, PermissionError, OSError):
+            enabled = []
+        if "cpu" not in enabled:
+            self._write(control, "+cpu")
+
+    def apply_cpu(self, action: Action, pid: int, create_time: float | None = None) -> CgroupResult:
+        if action not in {Action.THROTTLE, Action.PROTECT}:
+            return CgroupResult(False, f"Action {action.value} is not a CPU cgroup operation")
+        if pid <= 1:
+            return CgroupResult(False, "Refused to move a critical PID into a managed cgroup")
+        controllers_path = self.hierarchy_root / "cgroup.controllers"
+        try:
+            if "cpu" not in controllers_path.read_text(encoding="utf-8").split():
+                return CgroupResult(False, "cgroup v2 CPU controller is unavailable")
+            self._enable_cpu(self.hierarchy_root)
+            self.root.mkdir(parents=False, exist_ok=True)
+            self._enable_cpu(self.root)
+            restricted, protected = self.root / "restricted", self.root / "protected"
+            restricted.mkdir(exist_ok=True); protected.mkdir(exist_ok=True)
+            target = restricted if action is Action.THROTTLE else protected
+            weight = self.controls["restricted_cpu_weight"] if action is Action.THROTTLE else self.controls["protected_cpu_weight"]
+            self._write(target / "cpu.weight", int(weight))
+            if action is Action.THROTTLE:
+                period = int(self.controls["cpu_period_us"])
+                quota = int(period * self.controls["restricted_cpu_quota_percent"] / 100)
+                self._write(target / "cpu.max", f"{quota} {period}")
+            self._remember_original(pid, create_time)
+            self._write(target / "cgroup.procs", pid)
+            return CgroupResult(True, f"CPU scheduling applied: weight={int(weight)}")
+        except (FileNotFoundError, PermissionError, OSError) as exc:
+            return CgroupResult(False, f"CPU cgroup operation failed: {exc}")
 
     def prepare(self) -> None:
         controllers_path = self.hierarchy_root / "cgroup.controllers"

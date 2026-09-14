@@ -107,6 +107,14 @@
     <div class="card"><span class="label">Peak monitor RAM</span><span class="value">{{ '%.1f' | format(status.evaluation.get('peak_monitor_memory_bytes', 0) / 1048576) }} MB</span></div>
   </section>
   <p class="subtitle">Peak memory {{ '%.1f' | format(status.evaluation.get('peak_memory_percent', 0)) }}% · peak growth {{ '%.1f' | format(status.evaluation.get('peak_growth_mb_s', 0)) }} MB/s · peak PSI {{ '%.2f' | format(status.evaluation.get('peak_psi_some', 0)) }}% · peak risk {{ status.evaluation.get('peak_risk_score', 0) }}/100</p>
+  <h2>CPU scheduling &amp; virtual memory</h2>
+  <section class="cards">
+    <div class="card"><span class="label">CPU PSI some avg10</span><span id="cpu-psi-some" class="value">{{ '%.2f' | format(status.cpu_io.get('cpu_psi_some_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">CPU PSI some avg60</span><span id="cpu-psi-avg60" class="value">{{ '%.2f' | format(status.cpu_io.get('cpu_psi_some_avg60', 0)) }}%</span></div>
+    <div class="card"><span class="label">I/O PSI some avg10</span><span id="io-psi-some" class="value">{{ '%.2f' | format(status.cpu_io.get('io_psi_some_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">I/O PSI full avg10</span><span id="io-psi-full" class="value">{{ '%.2f' | format(status.cpu_io.get('io_psi_full_avg10', 0)) }}%</span></div>
+    <div class="card"><span class="label">CPU controller</span><span class="value {{ 'active' if status.cgroup.get('cpu_controller') else 'inactive' }}">{{ 'AVAILABLE' if status.cgroup.get('cpu_controller') else 'UNAVAILABLE' }}</span></div>
+  </section>
   <div class="downloads">
     <a href="{{ url_for('export_events') }}">Download event CSV</a>
     <a href="{{ url_for('export_samples') }}">Download sample CSV</a>
@@ -264,6 +272,7 @@
         if (!response.ok) return;
         const data = await response.json();
         const memory = data.memory || {};
+        const cpuIo = data.cpu_io || {};
         const prediction = data.prediction || {};
         const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
         set('exam-status', data.active ? 'ACTIVE' : 'INACTIVE');
@@ -273,6 +282,10 @@
         set('memory-used', `${Number(memory.used_percent || 0).toFixed(1)}%`);
         set('growth-trend', `${Number(memory.growth_mb_s || 0) >= 0 ? '+' : ''}${Number(memory.growth_mb_s || 0).toFixed(2)} MB/s`);
         set('psi-some', `${Number(memory.psi_some_avg10 || 0).toFixed(2)}%`);
+        set('cpu-psi-some', `${Number(cpuIo.cpu_psi_some_avg10 || 0).toFixed(2)}%`);
+        set('cpu-psi-avg60', `${Number(cpuIo.cpu_psi_some_avg60 || 0).toFixed(2)}%`);
+        set('io-psi-some', `${Number(cpuIo.io_psi_some_avg10 || 0).toFixed(2)}%`);
+        set('io-psi-full', `${Number(cpuIo.io_psi_full_avg10 || 0).toFixed(2)}%`);
         set('prediction-level', (prediction.level || 'waiting').toUpperCase());
         set('risk-score', `${prediction.score || 0}/100`);
         set('prediction-confidence', `${Math.round(Number(prediction.confidence || 0) * 100)}%`);

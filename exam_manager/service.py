@@ -13,6 +13,8 @@ from .cgroup_manager import CgroupManager
 from .decision_engine import decide
 from .event_logger import EventLogger
 from .memory_monitor import MemoryMonitor
+from .cpu_io_monitor import CpuIoMonitor
+from .proc_reader import read_process_detail
 from .models import Action, Classification, PressureLevel
 from .policy import Policy
 from .predictor import PressurePredictor
@@ -29,6 +31,7 @@ class ExamService:
         self.monitor = ProcessMonitor()
         self.cgroup_manager = self._make_cgroup_manager()
         self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
+        self.cpu_io_monitor = CpuIoMonitor()
         self.predictor = PressurePredictor(self.policy.pressure_thresholds)
         self.action_manager = ActionManager(
             self.policy.mode,
@@ -41,6 +44,7 @@ class ExamService:
         self._lock = threading.RLock()
         self._latest_processes: list[dict[str, Any]] = []
         self._latest_memory: dict[str, Any] = {}
+        self._latest_cpu_io: dict[str, Any] = {}
         self._pressure = PressureLevel.NORMAL
         self._latest_prediction: dict[str, Any] = {}
         self._prediction_history: list[dict[str, Any]] = []
@@ -65,6 +69,7 @@ class ExamService:
             # The enforcement root is not automatically the metric source.
             # Whole-system monitoring remains selected when memory_cgroup is unset.
             self.memory_monitor = MemoryMonitor(self.policy.memory_cgroup)
+            self.cpu_io_monitor = CpuIoMonitor()
             self.session_id = uuid.uuid4().hex[:12]
             self._latest_prediction = {}
             self._prediction_history = []
@@ -103,6 +108,7 @@ class ExamService:
                     ]
                 self._baseline_ready = True
                 memory = self.memory_monitor.sample()
+                cpu_io = self.cpu_io_monitor.sample()
                 prediction = self.predictor.predict(memory)
                 pressure = prediction.level
                 prediction_data = {"timestamp": memory.timestamp, **prediction.to_dict()}
@@ -126,6 +132,7 @@ class ExamService:
                 with self._lock:
                     self._latest_processes = process_rows
                     self._latest_memory = memory.to_dict()
+                    self._latest_cpu_io = cpu_io.to_dict()
                     self._pressure = pressure
                     self._latest_prediction = prediction_data
                     self._prediction_history.append(prediction_data)
@@ -162,9 +169,8 @@ class ExamService:
                     # Capture detection latency before enforcement. The action
                     # duration is recorded separately in details_json.
                     result = self.action_manager.execute(process, decision, memory)
-                    self.logger.record(
-                        self.session_id, process, memory, decision, result, detection_latency_ms
-                    )
+                    self.logger.record(self.session_id, process, memory, decision, result,
+                                       detection_latency_ms, read_process_detail(process.pid).to_dict())
                     self._last_actions[action_key] = now
 
                 loop_duration_ms = (time.monotonic() - started) * 1000
@@ -182,6 +188,7 @@ class ExamService:
                     monitor_cpu,
                     monitor_memory,
                     len(processes),
+                    self._latest_cpu_io,
                 )
             except Exception as exc:  # keep the monitor alive and expose the failure to the dashboard
                 with self._lock:
@@ -200,6 +207,7 @@ class ExamService:
                 "prediction": dict(self._latest_prediction),
                 "cgroup": self.cgroup_manager.status() if self.cgroup_manager else {"configured": False},
                 "memory": dict(self._latest_memory),
+                "cpu_io": dict(self._latest_cpu_io),
                 "process_count": len(self._latest_processes),
                 "evaluation": self.logger.summary(self.session_id),
                 "error": self._error,
