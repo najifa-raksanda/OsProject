@@ -219,8 +219,8 @@
 
     function showLatestBlockedEvent(events) {
       const alert = document.getElementById('latest-alert');
-      const blocked = events.find(item => item.classification === 'blocked');
-      if (!blocked) {
+      const blockedProcesses = liveProcesses.filter(item => item.classification === 'blocked');
+      if (!blockedProcesses.length) {
         alert.className = 'alert-banner';
         alert.textContent = '';
         return;
@@ -228,8 +228,9 @@
       alert.className = 'alert-banner visible';
       alert.replaceChildren();
       const title = document.createElement('strong');
-      title.textContent = 'Blocked application detected: ';
-      alert.append(title, document.createTextNode(`${blocked.process_name} (PID ${blocked.pid}). Recommended action: ${blocked.decision}. ${blocked.result_message}`));
+      title.textContent = `Blocked process${blockedProcesses.length === 1 ? '' : 'es'} running: `;
+      const details = blockedProcesses.map(item => `${item.name} (PID ${item.pid})`).join(', ');
+      alert.append(title, document.createTextNode(`${details}. Detect-only: would terminate.`));
     }
 
     async function refreshTables() {
