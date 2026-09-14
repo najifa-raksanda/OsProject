@@ -99,12 +99,12 @@
 
   <h2>Phase 8 · Evaluation</h2>
   <section class="cards">
-    <div class="card"><span class="label">Samples collected</span><span class="value">{{ status.evaluation.get('sample_count', 0) }}</span></div>
-    <div class="card"><span class="label">Policy events</span><span class="value">{{ status.evaluation.get('event_count', 0) }}</span></div>
-    <div class="card"><span class="label">Blocked detected</span><span class="value blocked">{{ status.evaluation.get('blocked_count', 0) }}</span></div>
-    <div class="card"><span class="label">Average detection</span><span class="value">{{ '%.0f' | format(status.evaluation.get('avg_detection_latency_ms', 0)) }} ms</span></div>
-    <div class="card"><span class="label">Average monitor loop</span><span class="value">{{ '%.1f' | format(status.evaluation.get('avg_loop_ms', 0)) }} ms</span></div>
-    <div class="card"><span class="label">Peak monitor RAM</span><span class="value">{{ '%.1f' | format(status.evaluation.get('peak_monitor_memory_bytes', 0) / 1048576) }} MB</span></div>
+    <div class="card"><span class="label">Samples collected</span><span id="sample-count" class="value">{{ status.evaluation.get('sample_count', 0) }}</span></div>
+    <div class="card"><span class="label">Policy events</span><span id="event-count" class="value">{{ status.evaluation.get('event_count', 0) }}</span></div>
+    <div class="card"><span class="label">Blocked detected</span><span id="blocked-count" class="value blocked">{{ status.evaluation.get('blocked_count', 0) }}</span></div>
+    <div class="card"><span class="label">Average detection</span><span id="avg-detection" class="value">{{ '%.0f' | format(status.evaluation.get('avg_detection_latency_ms', 0)) }} ms</span></div>
+    <div class="card"><span class="label">Average monitor loop</span><span id="avg-loop" class="value">{{ '%.1f' | format(status.evaluation.get('avg_loop_ms', 0)) }} ms</span></div>
+    <div class="card"><span class="label">Peak monitor RAM</span><span id="peak-monitor-ram" class="value">{{ '%.1f' | format(status.evaluation.get('peak_monitor_memory_bytes', 0) / 1048576) }} MB</span></div>
   </section>
   <p class="subtitle">Peak memory {{ '%.1f' | format(status.evaluation.get('peak_memory_percent', 0)) }}% · peak growth {{ '%.1f' | format(status.evaluation.get('peak_growth_mb_s', 0)) }} MB/s · peak PSI {{ '%.2f' | format(status.evaluation.get('peak_psi_some', 0)) }}% · peak risk {{ status.evaluation.get('peak_risk_score', 0) }}/100</p>
   <div class="downloads">
@@ -265,6 +265,7 @@
         const data = await response.json();
         const memory = data.memory || {};
         const prediction = data.prediction || {};
+        const evaluation = data.evaluation || {};
         const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
         set('exam-status', data.active ? 'ACTIVE' : 'INACTIVE');
         set('enforcement-status', (data.mode || '').toUpperCase());
@@ -276,6 +277,12 @@
         set('prediction-level', (prediction.level || 'waiting').toUpperCase());
         set('risk-score', `${prediction.score || 0}/100`);
         set('prediction-confidence', `${Math.round(Number(prediction.confidence || 0) * 100)}%`);
+        set('sample-count', evaluation.sample_count || 0);
+        set('event-count', evaluation.event_count || 0);
+        set('blocked-count', evaluation.blocked_count || 0);
+        set('avg-detection', `${Number(evaluation.avg_detection_latency_ms || 0).toFixed(0)} ms`);
+        set('avg-loop', `${Number(evaluation.avg_loop_ms || 0).toFixed(1)} ms`);
+        set('peak-monitor-ram', `${(Number(evaluation.peak_monitor_memory_bytes || 0) / 1048576).toFixed(1)} MB`);
         set('live-status', 'LIVE · updated just now');
         refreshTables();
       } catch (error) {
